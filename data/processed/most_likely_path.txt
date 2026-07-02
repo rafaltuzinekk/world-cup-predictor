@@ -1,0 +1,44 @@
+🏆 WORLD CUP 2026: FULL 32-TEAM DETERMINISTIC PATH 🏆
+
+=================================================================
+
+--- LEFT BRACKET ---
+[R32] Germany vs Paraguay ---> Paraguay (ACTUAL RESULT)
+[R32] France vs Sweden ---> France (ACTUAL RESULT)
+[R32] South Africa vs Canada ---> Canada (ACTUAL RESULT)
+[R32] Netherlands vs Morocco ---> Morocco (ACTUAL RESULT)
+[R32] Portugal (59.1%) vs Croatia (40.9%) ---> Portugal
+[R32] Spain (76.3%) vs Austria (23.7%) ---> Spain
+[R32] United States (74.4%) vs Bosnia and Herzegovina (25.6%) ---> United States
+[R32] Belgium (61.2%) vs Senegal (38.8%) ---> Belgium
+[R16] Paraguay (21.1%) vs France (78.9%) ---> France
+[R16] Canada (31.0%) vs Morocco (69.0%) ---> Morocco
+[R16] Portugal (36.4%) vs Spain (63.6%) ---> Spain
+[R16] United States (44.8%) vs Belgium (55.2%) ---> Belgium
+[QF]  France (64.6%) vs Morocco (35.4%) ---> France
+[QF]  Spain (73.8%) vs Belgium (26.2%) ---> Spain
+[SF]  France (49.9%) vs Spain (50.1%) ---> Spain GOES TO FINAL
+
+--- RIGHT BRACKET ---
+[R32] Brazil vs Japan ---> Brazil (ACTUAL RESULT)
+[R32] Ivory Coast vs Norway ---> Norway (ACTUAL RESULT)
+[R32] Mexico vs Ecuador ---> Mexico (ACTUAL RESULT)
+[R32] England vs DR Congo ---> England (ACTUAL RESULT)
+[R32] Argentina (92.7%) vs Cape Verde (7.3%) ---> Argentina
+[R32] Australia (53.6%) vs Egypt (46.4%) ---> Australia
+[R32] Switzerland (56.1%) vs Algeria (43.9%) ---> Switzerland
+[R32] Colombia (88.5%) vs Ghana (11.5%) ---> Colombia
+[R16] Brazil (61.2%) vs Norway (38.8%) ---> Brazil
+[R16] Mexico (51.0%) vs England (49.0%) ---> Mexico
+[R16] Argentina (83.6%) vs Australia (16.4%) ---> Argentina
+[R16] Switzerland (38.9%) vs Colombia (61.1%) ---> Colombia
+[QF]  Brazil (53.4%) vs Mexico (46.6%) ---> Brazil
+[QF]  Argentina (67.9%) vs Colombia (32.1%) ---> Argentina
+[SF]  Brazil (36.1%) vs Argentina (63.9%) ---> Argentina GOES TO FINAL
+
+=================================================================
+👑 THE GRAND FINAL 👑
+=================================================================
+Spain (Left) (45.3%) vs Argentina (Right) (54.7%)
+
+🏆 PREDICTED WORLD CUP CHAMPION: ARGENTINA 🏆
