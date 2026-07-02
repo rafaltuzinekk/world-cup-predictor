@@ -6,40 +6,37 @@
 ![Status](https://img.shields.io/badge/Status-Completed-success)
 
 ## 📌 Project Overview
-This repository contains a comprehensive, end-to-end Data Science pipeline designed to predict the outcomes of the FIFA World Cup knockout stages. Instead of relying on a single metric, this project bridges **historical econometrics** with **modern machine learning**, blending over 150 years of international football data with real-time tournament statistics.
+This repository contains a comprehensive, end-to-end Data Science pipeline designed to predict the outcomes of the FIFA World Cup. The project demonstrates how to handle "Scope Expansion" in data analytics by approaching the tournament from multiple analytical angles, blending over 150 years of historical match data with real-time tournament statistics.
 
-The project features a dual-engine prediction system:
-1. **A Stochastic Monte Carlo Simulator** (10,000 parallel realities evaluating tournament variance).
-2. **A Deterministic Bracket Engine** (A strict, math-based progression finding the single most likely path to the final).
+The architecture is divided into **Three Core Modules** to handle both micro-level match predictions and macro-level tournament simulations.
 
-## 🧠 The Mathematics & Machine Learning
-### The Elo Rating System
-At the core of the historical analysis is a custom-built Elo rating engine. The probability of Team A defeating Team B is continuously calculated and updated using the standard formula:
+## 🏗️ Architecture & Modules
 
-$$P(A) = \frac{1}{1 + 10^{(R_B - R_A)/400}}$$
+### Moduł 1: Data Foundation (The Engine)
+**Scripts:** `01_data_cleaning.ipynb` ➔ `03_fbref_scraping.ipynb`
+* **Historical Data:** Ingestion and standardization of Kaggle datasets covering over 40,000 international matches.
+* **Custom Elo Rating:** A mathematical engine built from scratch to calculate the absolute strength of national teams up to the current day.
+* **Live Scraping:** Bypassing anti-bot protections to extract real-time group stage data (Possession, Goals) directly from FBref.
 
-### The Random Forest "Form Modifier"
-Historical greatness (Elo) is not enough to win a modern tournament. The system scrapes live, in-tournament data (Possession %, Goal Differentials) directly from FBref. A **Random Forest Classifier** is trained on historical World Cup matchups and then applies a "Form Index" to adjust the raw Elo probabilities based on current on-pitch dominance.
+### Moduł 2: Micro Analysis (Machine Learning)
+**Scripts:** `04_feature_engineering.ipynb` ➔ `06_visualizations.ipynb`
+* **Objective:** Predict specific upcoming knockout matches based on current form.
+* **Methodology:** A **Random Forest Classifier** is trained to evaluate "differentials" (Elo difference vs. Possession/Goal difference). The model applies a "Form Index" to adjust the raw historical probabilities based on current on-pitch dominance.
+* **Output:** Visualized probabilities of advancement for selected highly-anticipated matches.
 
-## 📂 Architecture & Data Pipeline
-The project is strictly structured into sequential Jupyter Notebooks to showcase a clean data engineering workflow:
+### Moduł 3: Macro Analysis (Tournament Simulations)
+**Scripts:** `07_bracket_simulator.ipynb` ➔ `08_deterministic_bracket.ipynb`
+* **Objective:** Simulate the entire 32-team knockout stage to find the ultimate champion.
+* **Stochastic Approach (Monte Carlo):** Running 10,000 parallel realities using the Elo probabilities to account for variance, luck, and bracket difficulty.
+* **Deterministic Approach:** A strict, math-based progression finding the single most likely path to the final, injecting actual real-world results to keep the bracket accurate.
 
-* `01_data_cleaning.ipynb` - Ingestion and standardization of raw Kaggle datasets.
-* `02_elo_engine.ipynb` - Simulation of 40,000+ matches to calculate the modern Elo standings.
-* `03_fbref_scraping.ipynb` - Bypassing anti-bot protections to extract real-time group stage data from FBref.
-* `04_feature_engineering.ipynb` - Data blending and calculating "differentials" (e.g., Elo difference, Possession difference) using fuzzy matching.
-* `05_model_training.ipynb` - Training the Random Forest algorithm to evaluate knockout probabilities.
-* `06_visualizations.ipynb` - Rendering professional, presentation-ready Seaborn/Matplotlib charts.
-* `07_bracket_simulator.ipynb` - Running 10,000 Monte Carlo simulations on the strict 32-team tournament topology.
-* `08_deterministic_bracket.ipynb` - Generating the absolute most mathematically likely path, injecting actual real-world results to keep the bracket accurate.
-
-## 📊 Key Results
-The raw outputs, including the visual charts, `.txt` bracket logs, and full CSV reports, can be found in the `/data/processed/` directory. The dual-model approach successfully demonstrates the difference between absolute strength (Deterministic) and tournament survivability (Monte Carlo variance).
+## 📊 Key Results & Artifacts
+The raw outputs, including visual charts (`.png`), step-by-step bracket logs (`.txt`), and full statistical reports (`.csv`), can be found in the `/data/processed/` directory. 
 
 ## 🚀 How to Run Locally
 1. Clone this repository.
-2. Set up a local `.venv` and install required dependencies (`pandas`, `numpy`, `scikit-learn`, `matplotlib`, `seaborn`).
-3. Run the notebooks sequentially from `01` to `08` to completely rebuild the database and run new simulations.
+2. Set up a local Python environment and install the standard data stack (`pandas`, `numpy`, `scikit-learn`, `matplotlib`, `seaborn`).
+3. Run the notebooks sequentially from `01` to `08` to completely rebuild the database, train the ML model, and run new simulations.
 
 ---
-*Created as a comprehensive portfolio project demonstrating proficiency in Data Engineering, Predictive Modeling, and Python programming.*
+*Created as a comprehensive portfolio project demonstrating proficiency in Data Engineering, Predictive Modeling, Econometrics, and Python programming.*
