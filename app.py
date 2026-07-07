@@ -698,16 +698,31 @@ with tab2:
 
     st.divider()
 
+    show_only_wc_2026 = st.toggle(
+        "Pokaż tylko uczestników MŚ 2026",
+        value=True,
+        help="Włączone: tabela zawiera wyłącznie 48 reprezentacji biorących "
+             "udział w Mistrzostwach Świata 2026. Wyłączone: pełna lista "
+             "wszystkich drużyn w rankingu Elo.",
+    )
+
+    if show_only_wc_2026:
+        display_ratings_table = ELO_RATINGS_TABLE.loc[ELO_RATINGS_IS_WC_2026].reset_index(drop=True)
+        display_is_wc_2026 = pd.Series(True, index=display_ratings_table.index)
+    else:
+        display_ratings_table = ELO_RATINGS_TABLE
+        display_is_wc_2026 = ELO_RATINGS_IS_WC_2026
+
     def highlight_world_cup_2026_rows(row: pd.Series) -> list:
         """Row-wise style function for `Styler.apply`: gives every World
         Cup 2026 team a subtle dark-gold background so the 48 relevant
         teams jump out from the ~300-team leaderboard, while staying
         legible against the app's dark theme."""
-        is_participant = ELO_RATINGS_IS_WC_2026.iloc[row.name]
+        is_participant = display_is_wc_2026.iloc[row.name]
         style = "background-color: #332b00;" if is_participant else ""
         return [style] * len(row)
 
-    styled_ratings_table = ELO_RATINGS_TABLE.style.apply(highlight_world_cup_2026_rows, axis=1)
+    styled_ratings_table = display_ratings_table.style.apply(highlight_world_cup_2026_rows, axis=1)
 
     # Centered, fixed-width table: a 3-column layout with a wide middle
     # column keeps the leaderboard from stretching edge-to-edge on wide
@@ -719,7 +734,7 @@ with tab2:
             styled_ratings_table,
             hide_index=True,
             use_container_width=True,
-            height=min(52 * (len(ELO_RATINGS_TABLE) + 1), 1600),
+            height=min(52 * (len(display_ratings_table) + 1), 1600),
             column_config={
                 "Pozycja": st.column_config.NumberColumn("Pozycja", width="small"),
                 "Drużyna": st.column_config.TextColumn("Drużyna", width="medium"),
