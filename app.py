@@ -1,447 +1,570 @@
 """
-World Cup 2026 Match Predictor
-==============================
+World Cup 2026 - Knockout Bracket Predictor
+============================================
 
-Interactive Streamlit application that lets a user pick two national teams
-and see the model-generated probability of a Home Win / Draw / Away Win.
+Interactive Streamlit application that renders the full, official knockout
+("Playoffs") bracket of the tournament - from the Round of 32 all the way
+to the Final - and predicts every single match along the way.
 
-The predictive logic here is isolated (and lightly extended) from the
-project's own Data Science pipeline:
+The bracket topology and prediction logic are extracted (and lightly
+adapted for a real-time UI) from this project's own simulation notebooks:
 
-- ``notebooks/02_elo_engine.ipynb``      -> builds ``current_elo_ratings.csv``
-- ``notebooks/04_feature_engineering.ipynb`` -> blends Elo with FBref form
-  stats (possession / goals) into team "differentials".
-- ``notebooks/05_model_training.ipynb``  -> trains a ``RandomForestClassifier``
-  on the historical Elo difference and applies a "Form Index" modifier on
-  top of the raw model output.
+- ``notebooks/07_bracket_simulator.ipynb`` -> defines the full Round-of-32
+  bracket topology (which team plays whom, and how winners feed into the
+  next round: R32 -> R16 -> QF -> SF -> Final) and the Elo-based win
+  probability formula used to decide every matchup.
+- ``notebooks/08_deterministic_bracket.ipynb`` -> walks that exact same
+  topology *deterministically* (always advancing the higher-probability
+  team) to produce a single, concrete "most likely path" through the whole
+  tournament, while injecting real-world results for fixtures that have
+  already been played (the "Reality Check" step).
 
-The original notebook (05) only trains a *binary* Home-Win vs. Not-Home-Win
-classifier, because it is only ever used for knockout fixtures where a draw
-is not a valid outcome. Since this app needs a genuine three-way probability
-(Win A / Draw / Win B) for *any* pair of teams, the same Random Forest recipe
-(same features, same hyperparameters) is retrained here on a 3-class target
-(Away Win / Draw / Home Win) using the full historical dataset. The
-"Form Index" blending step from the notebook is preserved unchanged.
+All Monte-Carlo/statistical-aggregation code (used in notebook 07 to
+produce per-team advancement odds over 10,000 simulated tournaments) and
+all plotting-only code were intentionally left out: this app only needs
+the deterministic single-bracket walk, since it must render one concrete
+tree of matches, not an aggregate report.
 """
 
 from pathlib import Path
 
-import numpy as np
+import math
+
 import pandas as pd
 import streamlit as st
-from sklearn.ensemble import RandomForestClassifier
 
 # --------------------------------------------------------------------------- #
-# Page configuration & styling
+# Page configuration
 # --------------------------------------------------------------------------- #
 
 st.set_page_config(
-    page_title="World Cup 2026 | AI Match Predictor",
-    page_icon="⚽",
+    page_title="World Cup 2026 | Knockout Bracket",
+    page_icon="🏆",
     layout="wide",
     initial_sidebar_state="expanded",
 )
 
-CUSTOM_CSS = """
+# --------------------------------------------------------------------------- #
+# Global CSS - dark background, forced high-contrast WHITE text everywhere
+# --------------------------------------------------------------------------- #
+#
+# The previous version of this app suffered from poor contrast (dark text on
+# a dark background in several widgets/sidebar). This block forcefully
+# overrides text color to a bright white across every Streamlit element,
+# including the sidebar and dropdown/select widgets, while keeping the dark
+# themed background untouched.
+
+GLOBAL_CSS = """
 <style>
+/* ---- App background (kept dark) ---- */
 .stApp {
-    background: radial-gradient(circle at top left, #0f3d2e 0%, #06110c 55%, #050a08 100%);
+    background: radial-gradient(circle at top left, #123524 0%, #081812 55%, #04090a 100%);
 }
 
-[data-testid="stSidebar"] {
-    background: linear-gradient(180deg, #0b2a1f 0%, #071812 100%);
-    border-right: 1px solid rgba(0, 230, 118, 0.25);
+/* ---- Force bright white text EVERYWHERE ---- */
+html, body, .stApp, [class*="css"] {
+    color: #FFFFFF !important;
 }
+
+h1, h2, h3, h4, h5, h6,
+p, span, div, label, li, small, strong, em, a,
+[data-testid="stMarkdownContainer"],
+[data-testid="stCaptionContainer"],
+[data-testid="stText"],
+[data-testid="stMetricValue"],
+[data-testid="stMetricLabel"],
+[data-testid="stMetricDelta"],
+[data-testid="stExpander"] summary,
+[data-testid="stExpander"] p {
+    color: #FFFFFF !important;
+}
+
+/* ---- Sidebar: dark background + forced white text on every child ---- */
+[data-testid="stSidebar"] {
+    background: linear-gradient(180deg, #0b2a1f 0%, #061510 100%);
+    border-right: 1px solid rgba(255, 255, 255, 0.15);
+}
+[data-testid="stSidebar"] * {
+    color: #FFFFFF !important;
+}
+
+/* ---- Select / dropdown widgets: dark surface so white text stays legible ---- */
+[data-baseweb="select"] > div {
+    background-color: #12331f !important;
+    border-color: rgba(255, 255, 255, 0.35) !important;
+    color: #FFFFFF !important;
+}
+[data-baseweb="popover"] [role="listbox"],
+[data-baseweb="menu"] {
+    background-color: #12331f !important;
+}
+[role="option"] {
+    color: #FFFFFF !important;
+    background-color: #12331f !important;
+}
+[role="option"]:hover,
+[aria-selected="true"] {
+    background-color: #1c7a4d !important;
+    color: #FFFFFF !important;
+}
+[data-baseweb="select"] svg {
+    fill: #FFFFFF !important;
+}
+
+/* ---- Inline code snippets (e.g. `file.csv`) - keep them legible ---- */
+code, .stMarkdown code, [data-testid="stCaptionContainer"] code {
+    color: #ffce54 !important;
+    background-color: rgba(255, 255, 255, 0.14) !important;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 4px;
+    padding: 1px 5px;
+}
+
+/* ---- Misc widget chrome ---- */
+hr, [data-testid="stDivider"] {
+    border-color: rgba(255, 255, 255, 0.25) !important;
+}
+[data-testid="stExpander"] {
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.18) !important;
+    border-radius: 10px;
+}
+
+footer {visibility: hidden;}
+
+/* --------------------------------------------------------------------- */
+/* Bracket-specific styling                                              */
+/* --------------------------------------------------------------------- */
 
 .app-hero {
-    padding: 1.6rem 2rem;
+    padding: 1.5rem 2rem;
     border-radius: 18px;
     background: linear-gradient(120deg, #0d3b26 0%, #145c3a 45%, #1c7a4d 100%);
-    border: 1px solid rgba(0, 230, 118, 0.35);
+    border: 1px solid rgba(255, 255, 255, 0.25);
     box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
-    margin-bottom: 1.4rem;
+    margin-bottom: 1.2rem;
+    text-align: center;
 }
 .app-hero h1 {
     margin: 0;
-    font-size: 2.1rem;
-    color: #eafff2;
+    font-size: 2rem;
     letter-spacing: 0.5px;
 }
 .app-hero p {
     margin: 0.35rem 0 0 0;
-    color: #c8f5da;
-    font-size: 1.02rem;
+    font-size: 1rem;
+    opacity: 0.9;
 }
 
-.matchup-card {
-    background: rgba(255, 255, 255, 0.04);
-    border: 1px solid rgba(0, 230, 118, 0.22);
-    border-radius: 16px;
-    padding: 1.1rem 1rem;
+.round-title {
     text-align: center;
+    font-weight: 800;
+    font-size: 0.95rem;
+    letter-spacing: 1.2px;
+    text-transform: uppercase;
+    padding: 0.5rem 0.4rem;
+    margin-bottom: 0.6rem;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.18);
 }
-.matchup-card h2 {
-    color: #f5fff9;
-    margin-bottom: 0.15rem;
-    font-size: 1.5rem;
+
+.bracket-col {
+    display: flex;
+    flex-direction: column;
 }
-.matchup-card .subtitle {
-    color: #9fd8b6;
-    font-size: 0.85rem;
+
+.match-slot {
+    flex: 1 1 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 3px 2px;
+}
+
+.match-card {
+    width: 100%;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.22);
+    border-radius: 10px;
+    overflow: hidden;
+    font-size: 0.78rem;
+}
+.match-card.is-real {
+    border-color: rgba(255, 206, 84, 0.65);
+    box-shadow: 0 0 10px rgba(255, 206, 84, 0.15);
+}
+
+.team-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 6px;
+    padding: 5px 8px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+}
+.team-row:last-child {
+    border-bottom: none;
+}
+.team-row.winner {
+    background: rgba(28, 122, 77, 0.55);
+    font-weight: 800;
+}
+.team-row.loser {
+    opacity: 0.5;
+}
+.team-name {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.team-prob {
+    font-weight: 700;
+    font-size: 0.72rem;
+    flex-shrink: 0;
+}
+
+.real-tag {
+    display: block;
+    text-align: center;
+    font-size: 0.62rem;
+    letter-spacing: 0.8px;
+    text-transform: uppercase;
+    font-weight: 700;
+    color: #1a1608 !important;
+    background: #ffce54;
+    padding: 1px 0;
+}
+
+.champion-slot {
+    flex: 1 1 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.champion-card {
+    text-align: center;
+    padding: 1.4rem 1rem;
+    border-radius: 16px;
+    background: linear-gradient(160deg, #7a5c00 0%, #ad8800 45%, #ffce54 100%);
+    border: 2px solid #ffe9a8;
+    box-shadow: 0 0 25px rgba(255, 206, 84, 0.45);
+    width: 100%;
+}
+.champion-card .trophy {
+    font-size: 2.4rem;
+    display: block;
+    margin-bottom: 0.3rem;
+}
+.champion-card .champion-name {
+    font-size: 1.25rem;
+    font-weight: 900;
+    color: #1a1608 !important;
+    letter-spacing: 0.5px;
+}
+.champion-card .champion-label {
+    font-size: 0.72rem;
     text-transform: uppercase;
     letter-spacing: 1.5px;
-}
-
-.vs-badge {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    height: 100%;
-}
-.vs-badge span {
-    font-weight: 800;
-    font-size: 1.6rem;
-    color: #ffce54;
-    border: 2px solid #ffce54;
-    border-radius: 50%;
-    width: 62px;
-    height: 62px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: rgba(255, 206, 84, 0.08);
-}
-
-.verdict-banner {
-    text-align: center;
-    padding: 0.9rem 1rem;
-    border-radius: 14px;
-    background: rgba(0, 230, 118, 0.08);
-    border: 1px solid rgba(0, 230, 118, 0.3);
-    color: #eafff2;
-    font-size: 1.15rem;
-    font-weight: 600;
-    margin: 1rem 0 1.4rem 0;
-}
-
-.section-title {
-    color: #eafff2;
+    color: #3a2e00 !important;
     font-weight: 700;
-    font-size: 1.15rem;
-    margin: 1.6rem 0 0.6rem 0;
-    border-left: 4px solid #1c7a4d;
-    padding-left: 0.6rem;
 }
 
-footer {visibility: hidden;}
+.legend-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 10px;
+    border-radius: 20px;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    font-size: 0.78rem;
+    margin-right: 10px;
+}
 </style>
 """
-st.markdown(CUSTOM_CSS, unsafe_allow_html=True)
+st.markdown(GLOBAL_CSS, unsafe_allow_html=True)
 
 # --------------------------------------------------------------------------- #
-# Paths
+# Paths & data
 # --------------------------------------------------------------------------- #
 
 BASE_DIR = Path(__file__).resolve().parent
-DATA_DIR = BASE_DIR / "data" / "processed"
-
-HISTORICAL_ELO_PATH = DATA_DIR / "historical_with_elo.csv"
-CURRENT_ELO_PATH = DATA_DIR / "current_elo_ratings.csv"
-FORM_STATS_PATH = DATA_DIR / "fbref_group_stats.csv"
-
-
-# --------------------------------------------------------------------------- #
-# Data loading & team profile construction
-# (mirrors notebooks/04_feature_engineering.ipynb)
-# --------------------------------------------------------------------------- #
-
-
-def standardize_team_name(name: str) -> str:
-    """Reconciles the different team-name spellings used by the Elo engine
-    (historical results dataset) and the FBref scraper, so both sources can
-    be merged into a single team profile. Extends the original notebook's
-    mapping with a couple of extra aliases (Czechia, Turkiye) that were
-    previously falling through and being dropped from the tournament list.
-    """
-    name = str(name).strip()
-    if "Bosnia" in name:
-        return "Bosnia and Herzegovina"
-    if "USA" in name or name == "US":
-        return "United States"
-    if "Korea" in name and "South" not in name and "North" not in name and "United" not in name:
-        return "South Korea"
-    if "Iran" in name:
-        return "Iran"
-    if "Cote" in name or "Côte" in name or "Ivory" in name:
-        return "Ivory Coast"
-    if "Cabo Verde" in name:
-        return "Cape Verde"
-    if "Congo" in name and "DR" in name:
-        return "DR Congo"
-    if "Czech" in name:
-        return "Czech Republic"
-    if "Turk" in name or "Türk" in name:
-        return "Turkey"
-    return name
+ELO_PATH = BASE_DIR / "data" / "processed" / "current_elo_ratings.csv"
 
 
 @st.cache_data(show_spinner=False)
-def load_team_profiles() -> pd.DataFrame:
-    """Builds a clean per-team profile (Elo rating + tournament form stats)
-    for every 2026 World Cup team, ready to be turned into model features.
-    """
-    elo_df = pd.read_csv(CURRENT_ELO_PATH)
-    stats_df = pd.read_csv(FORM_STATS_PATH)
-
-    elo_df["team"] = elo_df["team"].apply(standardize_team_name)
-    stats_df["team"] = stats_df["team"].apply(standardize_team_name)
-
-    # Some historical team names collapse onto the same standardized name
-    # (e.g. a defunct/diaspora side sharing a substring with "Korea"). Keep
-    # the highest-rated (most representative) Elo entry for each name.
-    elo_df = elo_df.sort_values("current_elo", ascending=False)
-
-    profiles = pd.merge(
-        elo_df, stats_df[["team", "Poss", "Gls"]], on="team", how="inner"
-    )
-    profiles = profiles.drop_duplicates(subset="team", keep="first")
-    profiles = profiles.sort_values("current_elo", ascending=False).reset_index(drop=True)
-    return profiles
+def load_elo_ratings() -> dict:
+    df_elo = pd.read_csv(ELO_PATH)
+    return dict(zip(df_elo["team"], df_elo["current_elo"]))
 
 
-@st.cache_resource(show_spinner=False)
-def train_outcome_model() -> RandomForestClassifier:
-    """Trains the Random Forest classifier following the exact recipe of
-    notebooks/05_model_training.ipynb (same feature -- Elo difference --
-    and same hyperparameters), but on a 3-class target (Away Win / Draw /
-    Home Win) so the app can report a genuine draw probability.
-    """
-    history = pd.read_csv(HISTORICAL_ELO_PATH)
-    history["elo_diff"] = history["home_elo_before"] - history["away_elo_before"]
-
-    conditions = [
-        history["home_score"] > history["away_score"],
-        history["home_score"] == history["away_score"],
-    ]
-    # 2 = Home Win, 1 = Draw, 0 = Away Win
-    history["target"] = np.select(conditions, [2, 1], default=0)
-
-    history = history.dropna(subset=["elo_diff"])
-
-    X_train = history[["elo_diff"]]
-    y_train = history["target"]
-
-    model = RandomForestClassifier(n_estimators=100, max_depth=5, random_state=42)
-    model.fit(X_train, y_train)
-    return model
-
-
-def predict_match(
-    model: RandomForestClassifier,
-    team_a: pd.Series,
-    team_b: pd.Series,
-) -> tuple[float, float, float]:
-    """Returns (P(Team A wins), P(Draw), P(Team B wins)).
-
-    Reproduces the "Form Index Blending" step from
-    notebooks/05_model_training.ipynb: the raw historical-Elo probability is
-    nudged by a modifier derived from the possession/goal differential of
-    the two teams' current tournament form, then re-normalized so all three
-    outcomes still sum to 100%.
-    """
-    elo_diff = team_a["current_elo"] - team_b["current_elo"]
-    poss_diff = team_a["Poss"] - team_b["Poss"]
-    gls_diff = team_a["Gls"] - team_b["Gls"]
-
-    features = pd.DataFrame({"elo_diff": [elo_diff]})
-    raw_probs = model.predict_proba(features)[0]
-    class_to_prob = dict(zip(model.classes_, raw_probs))
-
-    p_away_win = class_to_prob.get(0, 0.0)
-    p_draw = class_to_prob.get(1, 0.0)
-    p_home_win = class_to_prob.get(2, 0.0)
-
-    form_modifier = (poss_diff * 0.002) + (gls_diff * 0.02)
-    p_home_win_adj = np.clip(p_home_win + form_modifier, 0.01, 0.97)
-    p_away_win_adj = np.clip(p_away_win - form_modifier, 0.01, 0.97)
-    p_draw_adj = p_draw
-
-    total = p_home_win_adj + p_draw_adj + p_away_win_adj
-    return p_home_win_adj / total, p_draw_adj / total, p_away_win_adj / total
-
+ELO_RATINGS = load_elo_ratings()
 
 # --------------------------------------------------------------------------- #
-# Load data & model
+# Bracket topology
+# (notebooks/07_bracket_simulator.ipynb & notebooks/08_deterministic_bracket.ipynb)
 # --------------------------------------------------------------------------- #
+#
+# Left half (8 matches) followed by right half (8 matches) of the Round of
+# 32. Every later round is simply "pair up consecutive winners", which
+# exactly reproduces the L1-L8 / R16_L.. / QF_L.. / SF_L (and R.. mirror)
+# progression coded explicitly in the notebooks.
 
-profiles = load_team_profiles()
-model = train_outcome_model()
-team_names = profiles["team"].tolist()
+ROUND_OF_32_FIXTURES = [
+    ("Germany", "Paraguay"),
+    ("France", "Sweden"),
+    ("South Africa", "Canada"),
+    ("Netherlands", "Morocco"),
+    ("Portugal", "Croatia"),
+    ("Spain", "Austria"),
+    ("United States", "Bosnia and Herzegovina"),
+    ("Belgium", "Senegal"),
+    ("Brazil", "Japan"),
+    ("Ivory Coast", "Norway"),
+    ("Mexico", "Ecuador"),
+    ("England", "DR Congo"),
+    ("Argentina", "Cape Verde"),
+    ("Australia", "Egypt"),
+    ("Switzerland", "Algeria"),
+    ("Colombia", "Ghana"),
+]
+
+# "Reality Check": fixtures that have already been played in real life, with
+# their actual outcome injected instead of relying on the Elo model.
+# (notebooks/08_deterministic_bracket.ipynb)
+KNOWN_RESULTS = {
+    ("Germany", "Paraguay"): "Paraguay",
+    ("France", "Sweden"): "France",
+    ("South Africa", "Canada"): "Canada",
+    ("Netherlands", "Morocco"): "Morocco",
+    ("Brazil", "Japan"): "Brazil",
+    ("Ivory Coast", "Norway"): "Norway",
+    ("Mexico", "Ecuador"): "Mexico",
+    ("England", "DR Congo"): "England",
+}
+
+ROUND_LABELS = [
+    "1/16 Finału",
+    "1/8 Finału",
+    "Ćwierćfinał",
+    "Półfinał",
+    "Finał",
+]
+
+
+def elo_win_probability(team_a: str, team_b: str) -> float:
+    """Classic Elo expected-score formula, same as used across every
+    notebook in this project (02, 07, 08)."""
+    elo_a = ELO_RATINGS.get(team_a, 1500)
+    elo_b = ELO_RATINGS.get(team_b, 1500)
+    return 1.0 / (1.0 + math.pow(10, (elo_b - elo_a) / 400.0))
+
+
+def predict_match(team_a: str, team_b: str) -> dict:
+    """Deterministic single-match prediction, mirroring
+    notebooks/08_deterministic_bracket.ipynb: real results (if the match has
+    already been played) always win over the model; otherwise the team with
+    Elo-implied probability > 50% advances.
+    """
+    if (team_a, team_b) in KNOWN_RESULTS:
+        winner = KNOWN_RESULTS[(team_a, team_b)]
+        return {"team_a": team_a, "team_b": team_b, "winner": winner,
+                "prob_a": None, "prob_b": None, "is_real": True}
+    if (team_b, team_a) in KNOWN_RESULTS:
+        winner = KNOWN_RESULTS[(team_b, team_a)]
+        return {"team_a": team_a, "team_b": team_b, "winner": winner,
+                "prob_a": None, "prob_b": None, "is_real": True}
+
+    prob_a = elo_win_probability(team_a, team_b)
+    prob_b = 1.0 - prob_a
+    winner = team_a if prob_a > 0.5 else team_b
+    return {"team_a": team_a, "team_b": team_b, "winner": winner,
+             "prob_a": prob_a * 100, "prob_b": prob_b * 100, "is_real": False}
+
+
+@st.cache_data(show_spinner=False)
+def simulate_full_bracket(fixtures: tuple) -> list:
+    """Walks the entire Round-of-32 -> Final topology one round at a time,
+    exactly like the `simulate_side` loop in
+    notebooks/08_deterministic_bracket.ipynb, but flattened across the whole
+    32-team field instead of splitting into a left/right half. Pairing
+    consecutive winners round after round reproduces that exact bracket
+    structure. Returns a list of rounds, each a list of match-result dicts.
+    """
+    rounds = []
+    current_round_teams = list(fixtures)
+
+    while True:
+        match_results = [predict_match(a, b) for a, b in current_round_teams]
+        rounds.append(match_results)
+        winners = [m["winner"] for m in match_results]
+        if len(winners) == 1:
+            break
+        current_round_teams = list(zip(winners[0::2], winners[1::2]))
+
+    return rounds
+
+
+bracket_rounds = simulate_full_bracket(tuple(ROUND_OF_32_FIXTURES))
+champion = bracket_rounds[-1][0]["winner"]
 
 # --------------------------------------------------------------------------- #
-# Sidebar - team selection
+# Sidebar
 # --------------------------------------------------------------------------- #
 
 with st.sidebar:
-    st.markdown("## ⚽ Ustawienia Meczu")
-    st.caption("Wybierz dwie drużyny, aby wygenerować prognozę AI.")
-
-    st.markdown("### 🔵 Drużyna A")
-    team_a_name = st.selectbox(
-        "Wybierz Drużynę A",
-        options=team_names,
-        index=team_names.index("Argentina") if "Argentina" in team_names else 0,
-        key="team_a",
-        label_visibility="collapsed",
-    )
-
-    st.markdown("### 🔴 Drużyna B")
-    default_b_idx = team_names.index("France") if "France" in team_names else min(1, len(team_names) - 1)
-    team_b_name = st.selectbox(
-        "Wybierz Drużynę B",
-        options=team_names,
-        index=default_b_idx,
-        key="team_b",
-        label_visibility="collapsed",
-    )
-
-    st.divider()
-    st.markdown("### ℹ️ O modelu")
+    st.markdown("## 🏆 Drabinka Playoffs")
     st.caption(
-        "Model bazuje na **Random Forest** wytrenowanym na "
-        "150+ latach historii meczów międzynarodowych (rating Elo), "
-        "wzbogaconym o bieżącą formę drużyn (posiadanie piłki, gole) "
-        "z turnieju FBref."
+        "Pełna, deterministyczna drabinka fazy pucharowej Mistrzostw Świata 2026 "
+        "- od 1/16 finału aż do Finału."
     )
-    st.caption("Dane: `data/processed/` • Logika modelu: `notebooks/05_model_training.ipynb`")
+    st.divider()
+    st.markdown("### 🧮 Jak liczony jest wynik?")
+    st.caption(
+        "• Mecze **już rozegrane** ⭐ pobierają rzeczywisty wynik "
+        "(`known_winners`, zgodnie z `08_deterministic_bracket.ipynb`).\n\n"
+        "• Mecze **przyszłe** rozstrzyga model ratingu **Elo** "
+        "(`02_elo_engine.ipynb`): wygrywa drużyna z szansą > 50%."
+    )
+    st.divider()
+    st.markdown("### 🔑 Legenda")
+    st.markdown(
+        '<span class="legend-chip">⭐ Wynik rzeczywisty</span>'
+        '<span class="legend-chip">🔮 Prognoza Elo</span>',
+        unsafe_allow_html=True,
+    )
+    st.divider()
+    st.caption("Dane: `data/processed/current_elo_ratings.csv`")
+    st.caption("Logika: `notebooks/07_bracket_simulator.ipynb`, `notebooks/08_deterministic_bracket.ipynb`")
 
 # --------------------------------------------------------------------------- #
-# Main view
+# Main view - hero header
 # --------------------------------------------------------------------------- #
 
 st.markdown(
-    """
-    <div class="app-hero">
-        <h1>🏆 AI Predyktor Meczów &mdash; Mistrzostwa Świata 2026</h1>
-        <p>Statystyczna prognoza wyniku meczu na bazie ratingu Elo i formy zespołów.</p>
-    </div>
-    """,
+    '<div class="app-hero">'
+    '<h1>🏆 Mistrzostwa Świata 2026 &mdash; Drabinka Fazy Pucharowej</h1>'
+    '<p>Deterministyczna prognoza całego turnieju: 1/16 finału → 1/8 finału → Ćwierćfinał → Półfinał → Finał</p>'
+    '</div>',
     unsafe_allow_html=True,
 )
 
-if team_a_name == team_b_name:
-    st.warning("Wybierz dwie **różne** drużyny, aby zobaczyć prognozę meczu.")
-    st.stop()
+legend_col_a, legend_col_b, legend_col_c = st.columns(3)
+legend_col_a.metric("Drużyny w drabince", "32")
+legend_col_b.metric("Mecze do rozegrania", str(sum(len(r) for r in bracket_rounds)))
+legend_col_c.metric("Przewidywany Mistrz 🏆", champion)
 
-team_a = profiles[profiles["team"] == team_a_name].iloc[0]
-team_b = profiles[profiles["team"] == team_b_name].iloc[0]
+st.divider()
 
-# ---- Matchup header -------------------------------------------------------
+# --------------------------------------------------------------------------- #
+# Bracket rendering
+# --------------------------------------------------------------------------- #
 
-col_a, col_vs, col_b = st.columns([4, 1, 4])
-with col_a:
-    st.markdown(
-        f"""
-        <div class="matchup-card">
-            <div class="subtitle">Drużyna A</div>
-            <h2>🔵 {team_a_name}</h2>
-        </div>
-        """,
-        unsafe_allow_html=True,
+TOTAL_SLOTS = len(bracket_rounds[0])  # 16 Round-of-32 matches -> tallest column
+BRACKET_HEIGHT_PX = TOTAL_SLOTS * 108
+
+
+# NOTE: every HTML string built below is assembled with ZERO leading
+# whitespace on each concatenated fragment and joined without newlines.
+# Streamlit's markdown renderer treats lines indented by 4+ spaces (or
+# certain blank-line/indentation combinations) as Markdown *code blocks*
+# even with unsafe_allow_html=True, which silently breaks HTML rendering.
+# Keeping everything on tightly joined, non-indented single-line fragments
+# avoids that pitfall entirely.
+
+
+def render_match_card(match: dict) -> str:
+    team_a, team_b, winner = match["team_a"], match["team_b"], match["winner"]
+    is_real = match["is_real"]
+
+    if is_real:
+        prob_a_label, prob_b_label = "⭐", "⭐"
+    else:
+        prob_a_label = f"{match['prob_a']:.0f}%"
+        prob_b_label = f"{match['prob_b']:.0f}%"
+
+    row_a_cls = "winner" if winner == team_a else "loser"
+    row_b_cls = "winner" if winner == team_b else "loser"
+    card_cls = "match-card is-real" if is_real else "match-card"
+
+    real_tag = '<span class="real-tag">Wynik rzeczywisty</span>' if is_real else ""
+
+    return (
+        f'<div class="{card_cls}">'
+        f"{real_tag}"
+        f'<div class="team-row {row_a_cls}">'
+        f'<span class="team-name">{team_a}</span>'
+        f'<span class="team-prob">{prob_a_label}</span>'
+        f"</div>"
+        f'<div class="team-row {row_b_cls}">'
+        f'<span class="team-name">{team_b}</span>'
+        f'<span class="team-prob">{prob_b_label}</span>'
+        f"</div>"
+        f"</div>"
     )
-with col_vs:
-    st.markdown('<div class="vs-badge"><span>VS</span></div>', unsafe_allow_html=True)
-with col_b:
-    st.markdown(
-        f"""
-        <div class="matchup-card">
-            <div class="subtitle">Drużyna B</div>
-            <h2>🔴 {team_b_name}</h2>
-        </div>
-        """,
-        unsafe_allow_html=True,
+
+
+def render_round_column(round_matches: list, label: str) -> str:
+    slots_html = "".join(
+        f'<div class="match-slot">{render_match_card(m)}</div>' for m in round_matches
+    )
+    return (
+        f'<div class="round-title">{label}</div>'
+        f'<div class="bracket-col" style="height:{BRACKET_HEIGHT_PX}px;">'
+        f"{slots_html}"
+        f"</div>"
     )
 
-# ---- Team form comparison --------------------------------------------------
 
-st.markdown('<div class="section-title">📊 Aktualna Forma Drużyn</div>', unsafe_allow_html=True)
+def render_champion_column(champion_team: str) -> str:
+    return (
+        f'<div class="round-title">Mistrz Świata</div>'
+        f'<div class="bracket-col" style="height:{BRACKET_HEIGHT_PX}px;">'
+        f'<div class="champion-slot">'
+        f'<div class="champion-card">'
+        f'<span class="trophy">🏆</span>'
+        f'<span class="champion-label">Mistrz Świata 2026</span><br/>'
+        f'<span class="champion-name">{champion_team}</span>'
+        f"</div>"
+        f"</div>"
+        f"</div>"
+    )
 
-stat_col_a, stat_col_b, stat_col_c = st.columns(3)
-elo_delta = team_a["current_elo"] - team_b["current_elo"]
-poss_delta = team_a["Poss"] - team_b["Poss"]
-gls_delta = team_a["Gls"] - team_b["Gls"]
 
-stat_col_a.metric(
-    label="Rating Elo (A vs B)",
-    value=f"{team_a['current_elo']:.0f}",
-    delta=f"{elo_delta:+.0f} vs {team_b_name}",
-)
-stat_col_b.metric(
-    label="Posiadanie piłki % (A vs B)",
-    value=f"{team_a['Poss']:.1f}%",
-    delta=f"{poss_delta:+.1f} pp vs {team_b_name}",
-)
-stat_col_c.metric(
-    label="Gole w turnieju (A vs B)",
-    value=f"{int(team_a['Gls'])}",
-    delta=f"{gls_delta:+.0f} vs {team_b_name}",
-)
+bracket_columns = st.columns(len(bracket_rounds) + 1)
 
-# ---- Prediction -------------------------------------------------------------
+for col, round_matches, label in zip(bracket_columns[:-1], bracket_rounds, ROUND_LABELS):
+    with col:
+        st.markdown(render_round_column(round_matches, label), unsafe_allow_html=True)
 
-p_home, p_draw, p_away = predict_match(model, team_a, team_b)
+with bracket_columns[-1]:
+    st.markdown(render_champion_column(champion), unsafe_allow_html=True)
 
-favourite = team_a_name if p_home >= p_away and p_home >= p_draw else (
-    team_b_name if p_away >= p_draw else "Remis"
-)
-favourite_prob = max(p_home, p_draw, p_away)
-
-st.markdown(
-    f"""
-    <div class="verdict-banner">
-        🔮 Model faworyzuje: <strong>{favourite}</strong>
-        &nbsp;({favourite_prob * 100:.1f}% szans)
-    </div>
-    """,
-    unsafe_allow_html=True,
-)
-
-st.markdown('<div class="section-title">🎯 Prognozowane Prawdopodobieństwo Wyniku</div>', unsafe_allow_html=True)
-
-metric_a, metric_draw, metric_b = st.columns(3)
-metric_a.metric(f"🔵 Wygrana: {team_a_name}", f"{p_home * 100:.1f}%")
-metric_draw.metric("⚪ Remis", f"{p_draw * 100:.1f}%")
-metric_b.metric(f"🔴 Wygrana: {team_b_name}", f"{p_away * 100:.1f}%")
-
-chart_df = pd.DataFrame(
-    {
-        "Wynik": [f"Wygrana {team_a_name}", "Remis", f"Wygrana {team_b_name}"],
-        "Prawdopodobieństwo (%)": [
-            round(p_home * 100, 1),
-            round(p_draw * 100, 1),
-            round(p_away * 100, 1),
-        ],
-    }
-).set_index("Wynik")
-
-st.bar_chart(chart_df, color="#1c7a4d")
-
+st.divider()
 st.caption(
-    "⚠️ Prognozy generowane są przez model statystyczny (Random Forest) do celów "
-    "demonstracyjnych/portfolio i nie stanowią porady bukmacherskiej."
+    "⚠️ Drabinka jest generowana automatycznie na bazie ratingu Elo oraz znanych "
+    "wyników rzeczywistych mocno wczesnych meczów. Prognozy służą celom "
+    "demonstracyjnym/portfolio i nie stanowią porady bukmacherskiej."
 )
 
-with st.expander("🔧 Szczegóły techniczne modelu"):
-    st.write(
-        f"""
-        - **Cechy modelu:** różnica ratingu Elo (`elo_diff`), skorygowana o różnicę
-          posiadania piłki i liczby zdobytych goli w bieżącym turnieju
-          (tzw. *Form Index*, patrz `notebooks/05_model_training.ipynb`).
-        - **Algorytm:** `RandomForestClassifier(n_estimators=100, max_depth=5)`
-          wytrenowany na {pd.read_csv(HISTORICAL_ELO_PATH).shape[0]:,} historycznych
-          meczach międzynarodowych (`data/processed/historical_with_elo.csv`).
-        - **Elo {team_a_name}:** {team_a['current_elo']:.1f} &nbsp;|&nbsp;
-          **Elo {team_b_name}:** {team_b['current_elo']:.1f}
-        - **Różnica Elo:** {elo_delta:+.1f}
+with st.expander("🔧 Szczegóły techniczne symulacji"):
+    st.markdown(
+        """
+        - **Topologia drabinki:** 16 par 1/16 finału (32 drużyny), redukowane
+          konsekwentnie do 1/8 finału, ćwierćfinału, półfinału i finału
+          &mdash; identyczna struktura jak w `notebooks/07_bracket_simulator.ipynb`
+          i `notebooks/08_deterministic_bracket.ipynb`.
+        - **Reguła awansu:** dla każdego meczu wygrywa drużyna z wyższym
+          prawdopodobieństwem wygranej wg wzoru Elo:
+          `P(A) = 1 / (1 + 10^((Elo_B - Elo_A) / 400))`.
+        - **Wstrzykiwanie realnych wyników:** dla meczów już rozegranych w
+          rzeczywistości, model nie zgaduje &mdash; wynik jest wzięty
+          bezpośrednio z danych (`KNOWN_RESULTS`, odpowiednik `known_winners`
+          z notatnika 08).
+        - **Różnica względem notatnika 08:** logika przechodzenia przez rundy
+          jest tu spłaszczona (lista kolejnych par, redukowana runda po
+          rundzie) zamiast jawnego podziału na stronę LEFT/RIGHT &mdash; daje
+          to identyczne wyniki, ale prościej skaluje się do renderowania w UI.
         """
     )
