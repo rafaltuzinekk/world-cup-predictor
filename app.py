@@ -398,12 +398,16 @@ ROUND_OF_32_FIXTURES = [
 # their actual outcome injected instead of relying on the Elo model.
 # (notebooks/08_deterministic_bracket.ipynb)
 #
-# Stan na dzień dzisiejszy: cała runda 1/16 finału (Round of 32) została już
-# rozegrana, więc każda z 16 par ma wpisany rzeczywisty wynik. Kolejne rundy
-# (1/8 finału i dalej) wciąż czekają na rozegranie, więc nadal są prognozowane
-# przez model Elo.
+# Stan na dzień dzisiejszy: cała runda 1/16 finału (Round of 32) ORAZ 6 z 8
+# meczów 1/8 finału (Round of 16) zostały już rozegrane w rzeczywistości.
+# Pozostałe mecze (2 mecze 1/8 finału, ćwierćfinały, półfinały, finał) wciąż
+# czekają na rozegranie, więc nadal są prognozowane przez model Elo.
+#
+# WAŻNE: to jest twardy "override" - `predict_match()` (poniżej) ZAWSZE
+# zwraca zwycięzcę wpisanego tutaj, niezależnie od tego, co mówi model Elo,
+# nawet jeśli dana drużyna miała mniejsze procentowe szanse na wygraną.
 KNOWN_RESULTS = {
-    # Lewa strona drabinki (mecze rozegrane)
+    # --- Runda 1/16 finału (Round of 32) - rozegrana w całości ---
     ("Germany", "Paraguay"): "Paraguay",
     ("France", "Sweden"): "France",
     ("South Africa", "Canada"): "Canada",
@@ -411,16 +415,24 @@ KNOWN_RESULTS = {
     ("Portugal", "Croatia"): "Portugal",
     ("Spain", "Austria"): "Spain",
     ("United States", "Bosnia and Herzegovina"): "United States",
-    ("Belgium", "Senegal"): "Senegal",
-    # Prawa strona drabinki (mecze rozegrane)
+    ("Belgium", "Senegal"): "Belgium",
     ("Brazil", "Japan"): "Brazil",
     ("Ivory Coast", "Norway"): "Norway",
     ("Mexico", "Ecuador"): "Mexico",
     ("England", "DR Congo"): "England",
     ("Argentina", "Cape Verde"): "Argentina",
     ("Australia", "Egypt"): "Egypt",
-    ("Switzerland", "Algeria"): "Algeria",
+    ("Switzerland", "Algeria"): "Switzerland",
     ("Colombia", "Ghana"): "Colombia",
+    # --- Runda 1/8 finału (Round of 16) - 6 z 8 meczów rozegranych ---
+    ("Paraguay", "France"): "France",
+    ("Canada", "Morocco"): "Morocco",
+    ("Portugal", "Spain"): "Spain",
+    ("United States", "Belgium"): "Belgium",
+    ("Brazil", "Norway"): "Norway",
+    ("Mexico", "England"): "England",
+    # (Argentina vs Egypt oraz Switzerland vs Colombia jeszcze nierozegrane
+    # -> nadal prognozowane przez model Elo)
 }
 
 ROUND_LABELS = [

@@ -3,38 +3,38 @@
 =================================================================
 
 --- LEFT BRACKET ---
-[R32] Germany vs Paraguay ---> Paraguay (ACTUAL RESULT)
-[R32] France vs Sweden ---> France (ACTUAL RESULT)
-[R32] South Africa vs Canada ---> Canada (ACTUAL RESULT)
-[R32] Netherlands vs Morocco ---> Morocco (ACTUAL RESULT)
-[R32] Portugal vs Croatia ---> Portugal (ACTUAL RESULT)
-[R32] Spain vs Austria ---> Spain (ACTUAL RESULT)
-[R32] United States vs Bosnia and Herzegovina ---> United States (ACTUAL RESULT)
-[R32] Belgium vs Senegal ---> Senegal (ACTUAL RESULT)
-[R16] Paraguay (21.9%) vs France (78.1%) ---> France
-[R16] Canada (28.6%) vs Morocco (71.4%) ---> Morocco
-[R16] Portugal (37.8%) vs Spain (62.2%) ---> Spain
-[R16] United States (49.8%) vs Senegal (50.2%) ---> Senegal
+[R32] Germany (64.1%) vs Paraguay (35.9%) ---> Paraguay (ACTUAL RESULT)
+[R32] France (84.0%) vs Sweden (16.0%) ---> France (ACTUAL RESULT)
+[R32] South Africa (34.5%) vs Canada (65.5%) ---> Canada (ACTUAL RESULT)
+[R32] Netherlands (41.8%) vs Morocco (58.2%) ---> Morocco (ACTUAL RESULT)
+[R32] Portugal (59.8%) vs Croatia (40.2%) ---> Portugal (ACTUAL RESULT)
+[R32] Spain (74.2%) vs Austria (25.8%) ---> Spain (ACTUAL RESULT)
+[R32] United States (76.8%) vs Bosnia and Herzegovina (23.2%) ---> United States (ACTUAL RESULT)
+[R32] Belgium (52.4%) vs Senegal (47.6%) ---> Belgium (ACTUAL RESULT)
+[R16] Paraguay (21.9%) vs France (78.1%) ---> France (ACTUAL RESULT)
+[R16] Canada (28.6%) vs Morocco (71.4%) ---> Morocco (ACTUAL RESULT)
+[R16] Portugal (37.8%) vs Spain (62.2%) ---> Spain (ACTUAL RESULT)
+[R16] United States (47.4%) vs Belgium (52.6%) ---> Belgium (ACTUAL RESULT)
 [QF]  France (55.2%) vs Morocco (44.8%) ---> France
-[QF]  Spain (73.7%) vs Senegal (26.3%) ---> Spain
+[QF]  Spain (71.8%) vs Belgium (28.2%) ---> Spain
 [SF]  France (50.2%) vs Spain (49.8%) ---> France GOES TO FINAL
 
 --- RIGHT BRACKET ---
-[R32] Brazil vs Japan ---> Brazil (ACTUAL RESULT)
-[R32] Ivory Coast vs Norway ---> Norway (ACTUAL RESULT)
-[R32] Mexico vs Ecuador ---> Mexico (ACTUAL RESULT)
-[R32] England vs DR Congo ---> England (ACTUAL RESULT)
-[R32] Argentina vs Cape Verde ---> Argentina (ACTUAL RESULT)
-[R32] Australia vs Egypt ---> Egypt (ACTUAL RESULT)
-[R32] Switzerland vs Algeria ---> Algeria (ACTUAL RESULT)
-[R32] Colombia vs Ghana ---> Colombia (ACTUAL RESULT)
-[R16] Brazil (60.6%) vs Norway (39.4%) ---> Brazil
-[R16] Mexico (55.7%) vs England (44.3%) ---> Mexico
+[R32] Brazil (60.4%) vs Japan (39.6%) ---> Brazil (ACTUAL RESULT)
+[R32] Ivory Coast (40.9%) vs Norway (59.1%) ---> Norway (ACTUAL RESULT)
+[R32] Mexico (67.0%) vs Ecuador (33.0%) ---> Mexico (ACTUAL RESULT)
+[R32] England (70.2%) vs DR Congo (29.8%) ---> England (ACTUAL RESULT)
+[R32] Argentina (87.5%) vs Cape Verde (12.5%) ---> Argentina (ACTUAL RESULT)
+[R32] Australia (48.2%) vs Egypt (51.8%) ---> Egypt (ACTUAL RESULT)
+[R32] Switzerland (45.4%) vs Algeria (54.6%) ---> Switzerland (ACTUAL RESULT)
+[R32] Colombia (83.2%) vs Ghana (16.8%) ---> Colombia (ACTUAL RESULT)
+[R16] Brazil (60.6%) vs Norway (39.4%) ---> Norway (ACTUAL RESULT)
+[R16] Mexico (55.7%) vs England (44.3%) ---> England (ACTUAL RESULT)
 [R16] Argentina (77.2%) vs Egypt (22.8%) ---> Argentina
-[R16] Algeria (43.3%) vs Colombia (56.7%) ---> Colombia
-[QF]  Brazil (50.3%) vs Mexico (49.7%) ---> Brazil
+[R16] Switzerland (38.8%) vs Colombia (61.2%) ---> Colombia
+[QF]  Norway (45.3%) vs England (54.7%) ---> England
 [QF]  Argentina (65.8%) vs Colombia (34.2%) ---> Argentina
-[SF]  Brazil (39.1%) vs Argentina (60.9%) ---> Argentina GOES TO FINAL
+[SF]  England (33.5%) vs Argentina (66.5%) ---> Argentina GOES TO FINAL
 
 =================================================================
 👑 THE GRAND FINAL 👑
