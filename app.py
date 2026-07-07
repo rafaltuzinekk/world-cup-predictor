@@ -397,15 +397,43 @@ ROUND_OF_32_FIXTURES = [
 # "Reality Check": fixtures that have already been played in real life, with
 # their actual outcome injected instead of relying on the Elo model.
 # (notebooks/08_deterministic_bracket.ipynb)
+#
+# Stan na dzień dzisiejszy: cała runda 1/16 finału (Round of 32) ORAZ 6 z 8
+# meczów 1/8 finału (Round of 16) zostały już rozegrane w rzeczywistości.
+# Pozostałe mecze (2 mecze 1/8 finału, ćwierćfinały, półfinały, finał) wciąż
+# czekają na rozegranie, więc nadal są prognozowane przez model Elo.
+#
+# WAŻNE: to jest twardy "override" - `predict_match()` (poniżej) ZAWSZE
+# zwraca zwycięzcę wpisanego tutaj, niezależnie od tego, co mówi model Elo,
+# nawet jeśli dana drużyna miała mniejsze procentowe szanse na wygraną.
+#
+# Klucze są `frozenset({team_a, team_b})` (a nie tuple) - dopasowanie meczu
+# jest więc z definicji NIEZALEŻNE od kolejności drużyn: nie ma znaczenia,
+# czy w danej rundzie drabinki dana drużyna wypadnie jako "team_a" czy
+# "team_b", bo frozenset({"A", "B"}) == frozenset({"B", "A"}).
 KNOWN_RESULTS = {
-    ("Germany", "Paraguay"): "Paraguay",
-    ("France", "Sweden"): "France",
-    ("South Africa", "Canada"): "Canada",
-    ("Netherlands", "Morocco"): "Morocco",
-    ("Brazil", "Japan"): "Brazil",
-    ("Ivory Coast", "Norway"): "Norway",
-    ("Mexico", "Ecuador"): "Mexico",
-    ("England", "DR Congo"): "England",
+    frozenset({'Colombia', 'Ghana'}): 'Colombia',
+    frozenset({'Argentina', 'Cape Verde'}): 'Argentina',
+    frozenset({'Egypt', 'Australia'}): 'Egypt',
+    frozenset({'Switzerland', 'Algeria'}): 'Switzerland',
+    frozenset({'Portugal', 'Croatia'}): 'Portugal',
+    frozenset({'Spain', 'Austria'}): 'Spain',
+    frozenset({'United States', 'Bosnia and Herzegovina'}): 'United States',
+    frozenset({'Belgium', 'Senegal'}): 'Belgium',
+    frozenset({'England', 'DR Congo'}): 'England',
+    frozenset({'Mexico', 'Ecuador'}): 'Mexico',
+    frozenset({'France', 'Sweden'}): 'France',
+    frozenset({'Norway', 'Ivory Coast'}): 'Norway',
+    frozenset({'Morocco', 'Netherlands'}): 'Morocco',
+    frozenset({'Paraguay', 'Germany'}): 'Paraguay',
+    frozenset({'Brazil', 'Japan'}): 'Brazil',
+    frozenset({'Canada', 'South Africa'}): 'Canada',
+    frozenset({'Belgium', 'United States'}): 'Belgium',
+    frozenset({'Spain', 'Portugal'}): 'Spain',
+    frozenset({'England', 'Mexico'}): 'England',
+    frozenset({'Norway', 'Brazil'}): 'Norway',
+    frozenset({'France', 'Paraguay'}): 'France',
+    frozenset({'Morocco', 'Canada'}): 'Morocco'
 }
 
 ROUND_LABELS = [
@@ -427,27 +455,75 @@ def elo_win_probability(team_a: str, team_b: str) -> float:
 
 def predict_match(team_a: str, team_b: str) -> dict:
     """Deterministic single-match prediction, mirroring
-    notebooks/08_deterministic_bracket.ipynb: real results (if the match has
-    already been played) always win over the model; otherwise the team with
-    Elo-implied probability > 50% advances.
-    """
-    if (team_a, team_b) in KNOWN_RESULTS:
-        winner = KNOWN_RESULTS[(team_a, team_b)]
-        return {"team_a": team_a, "team_b": team_b, "winner": winner,
-                "prob_a": None, "prob_b": None, "is_real": True}
-    if (team_b, team_a) in KNOWN_RESULTS:
-        winner = KNOWN_RESULTS[(team_b, team_a)]
-        return {"team_a": team_a, "team_b": team_b, "winner": winner,
-                "prob_a": None, "prob_b": None, "is_real": True}
+    notebooks/08_deterministic_bracket.ipynb.
 
+    HARD OVERRIDE RULE: if the fixture is present in ``KNOWN_RESULTS``, that
+    real-world result is *unconditionally* the winner - the Elo model's
+    opinion is never consulted to decide who advances, even when the real
+    winner had a lower/losing Elo probability (an "upset"). Elo is only
+    ever used to pick a winner when the match has genuinely not been played
+    yet.
+
+    Matching against ``KNOWN_RESULTS`` is entirely order-independent: the
+    lookup key is ``frozenset({team_a, team_b})``, so it doesn't matter
+    whether a given team ends up as "team_a" or "team_b" in a particular
+    round of the bracket walk.
+
+    The Elo win probability is always computed and returned regardless of
+    which branch decided the winner: the UI still shows what odds the model
+    gave *before* the match was played, alongside the real-result marker.
+    """
     prob_a = elo_win_probability(team_a, team_b)
     prob_b = 1.0 - prob_a
+
+    winner = KNOWN_RESULTS.get(frozenset({team_a, team_b}))
+
+    # Defensive fallback (should never trigger with well-formed data): if a
+    # KNOWN_RESULTS entry somehow names a winner that isn't either team in
+    # this fixture, don't crash the whole app - just ignore that (broken)
+    # entry and let the Elo model decide this particular match instead.
+    if winner is not None and winner not in (team_a, team_b):
+        winner = None
+
+    if winner is not None:
+        return {"team_a": team_a, "team_b": team_b, "winner": winner,
+                "prob_a": prob_a * 100, "prob_b": prob_b * 100, "is_real": True}
+
     winner = team_a if prob_a > 0.5 else team_b
     return {"team_a": team_a, "team_b": team_b, "winner": winner,
              "prob_a": prob_a * 100, "prob_b": prob_b * 100, "is_real": False}
 
 
-@st.cache_data(show_spinner=False)
+def find_unmatched_known_results(rounds: list) -> set:
+    """Sanity check for the hard-override rule above (non-fatal): returns
+    every ``KNOWN_RESULTS`` entry that was never matched against an actual
+    fixture while walking the *entire* bracket (every round returned by
+    ``simulate_full_bracket`` - Round of 32, Round of 16, quarter-finals,
+    semi-finals and the final, not just the initial ``ROUND_OF_32_FIXTURES``
+    list). A non-empty result usually means a team name in ``KNOWN_RESULTS``
+    doesn't exactly match the name used elsewhere in the app - this is only
+    used to show an informational note in the UI, it never blocks the app
+    from starting."""
+    matched_keys = set()
+    for round_matches in rounds:
+        for match in round_matches:
+            if not match["is_real"]:
+                continue
+            matched_keys.add(frozenset({match["team_a"], match["team_b"]}))
+    return set(KNOWN_RESULTS) - matched_keys
+
+
+# NOTE: deliberately NOT decorated with @st.cache_data. This function's
+# only argument (`fixtures`) never changes between reruns, but its actual
+# output depends on the *global* `KNOWN_RESULTS` dict (read indirectly via
+# `predict_match`). Streamlit's cache key is derived from the function's own
+# source code + its explicit arguments - it has no way to know that a global
+# it reads through a nested call has changed. Caching this here previously
+# meant that editing `KNOWN_RESULTS` (e.g. adding/fixing real-world results)
+# could silently keep serving a stale bracket from before the edit, for as
+# long as the Streamlit process stayed warm. The whole walk is only ~31
+# matches, so recomputing it on every rerun is effectively free - not worth
+# the staleness risk.
 def simulate_full_bracket(fixtures: tuple) -> list:
     """Walks the entire Round-of-32 -> Final topology one round at a time,
     exactly like the `simulate_side` loop in
@@ -473,6 +549,12 @@ def simulate_full_bracket(fixtures: tuple) -> list:
 bracket_rounds = simulate_full_bracket(tuple(ROUND_OF_32_FIXTURES))
 champion = bracket_rounds[-1][0]["winner"]
 
+# Non-fatal sanity check: never blocks the app from starting. If it finds
+# something, it's surfaced as a small info note in the sidebar (see below)
+# instead of crashing - predict_match() overriding known winners correctly
+# is what matters, not this diagnostic.
+UNMATCHED_KNOWN_RESULTS = find_unmatched_known_results(bracket_rounds)
+
 # --------------------------------------------------------------------------- #
 # Sidebar
 # --------------------------------------------------------------------------- #
@@ -487,7 +569,13 @@ with st.sidebar:
     st.markdown("### 🧮 Jak liczony jest wynik?")
     st.caption(
         "• Mecze **już rozegrane** ⭐ pobierają rzeczywisty wynik "
-        "(`known_winners`, zgodnie z `08_deterministic_bracket.ipynb`).\n\n"
+        "(`known_winners`, zgodnie z `08_deterministic_bracket.ipynb`) - to "
+        "**twardy override**: liczy się wyłącznie rzeczywisty wynik, nawet "
+        "jeśli dana drużyna miała niższe szanse wg Elo. Pod nazwami drużyn "
+        "wciąż widać procentowe szanse, jakie dawał model **przed** "
+        "rozegraniem meczu. Dla rozegranych meczów wyświetlane procenty to "
+        "**przedmeczowe szanse wyliczone przez model Elo** - drużyna, która "
+        "awansowała mimo szansy ≤ 50%, jest oznaczona ikoną ⚡ (niespodzianka).\n\n"
         "• Mecze **przyszłe** rozstrzyga model ratingu **Elo** "
         "(`02_elo_engine.ipynb`): wygrywa drużyna z szansą > 50%."
     )
@@ -495,7 +583,8 @@ with st.sidebar:
     st.markdown("### 🔑 Legenda")
     st.markdown(
         '<span class="legend-chip">⭐ Wynik rzeczywisty</span>'
-        '<span class="legend-chip">🔮 Prognoza Elo</span>',
+        '<span class="legend-chip">🔮 Prognoza Elo</span>'
+        '<span class="legend-chip">⚡ Niespodzianka (awans z szansą < 50%)</span>',
         unsafe_allow_html=True,
     )
     st.divider()
@@ -506,6 +595,18 @@ with st.sidebar:
     st.divider()
     st.caption("Dane: `data/processed/current_elo_ratings.csv`")
     st.caption("Logika: `notebooks/07_bracket_simulator.ipynb`, `notebooks/08_deterministic_bracket.ipynb`")
+
+    if UNMATCHED_KNOWN_RESULTS:
+        # Informational only - never blocks the app. See
+        # find_unmatched_known_results() for details.
+        _unmatched_teams = ", ".join(
+            " vs ".join(pair) for pair in sorted(sorted(p) for p in UNMATCHED_KNOWN_RESULTS)
+        )
+        st.info(
+            f"ℹ️ Uwaga deweloperska: {len(UNMATCHED_KNOWN_RESULTS)} wpis(y) w "
+            f"`KNOWN_RESULTS` nie trafiły na żaden mecz w drabince ({_unmatched_teams}). "
+            "Nie wpływa to na działanie aplikacji - prognoza jest generowana normalnie."
+        )
 
 # --------------------------------------------------------------------------- #
 # Main view - hero header
@@ -550,8 +651,12 @@ with tab1:
         team_a, team_b, winner = match["team_a"], match["team_b"], match["winner"]
         is_real = match["is_real"]
 
+        # Mecze rozegrane pokazują GWIAZDKĘ *i* procentowe szanse wyliczone
+        # przez model Elo - tak użytkownik widzi, jakiego wyniku oczekiwał
+        # model, zanim mecz się faktycznie odbył.
         if is_real:
-            prob_a_label, prob_b_label = "⭐", "⭐"
+            prob_a_label = f"⭐ {match['prob_a']:.0f}%"
+            prob_b_label = f"⭐ {match['prob_b']:.0f}%"
         else:
             prob_a_label = f"{match['prob_a']:.0f}%"
             prob_b_label = f"{match['prob_b']:.0f}%"
@@ -562,15 +667,25 @@ with tab1:
 
         real_tag = '<span class="real-tag">Wynik rzeczywisty</span>' if is_real else ""
 
+        # Niespodzianka (⚡): mecz już rozegrany, w którym drużyna, która
+        # awansowała (zwycięzca z KNOWN_RESULTS), miała przedmeczowe
+        # prawdopodobieństwo Elo <= 50% - czyli model jej NIE faworyzował.
+        winner_prob = match["prob_a"] if winner == team_a else match["prob_b"]
+        is_upset = is_real and winner_prob <= 50.0
+        upset_icon = " ⚡" if is_upset else ""
+
+        team_a_name = f"{team_a}{upset_icon}" if winner == team_a else team_a
+        team_b_name = f"{team_b}{upset_icon}" if winner == team_b else team_b
+
         return (
             f'<div class="{card_cls}">'
             f"{real_tag}"
             f'<div class="team-row {row_a_cls}">'
-            f'<span class="team-name">{team_a}</span>'
+            f'<span class="team-name">{team_a_name}</span>'
             f'<span class="team-prob">{prob_a_label}</span>'
             f"</div>"
             f'<div class="team-row {row_b_cls}">'
-            f'<span class="team-name">{team_b}</span>'
+            f'<span class="team-name">{team_b_name}</span>'
             f'<span class="team-prob">{prob_b_label}</span>'
             f"</div>"
             f"</div>"
@@ -630,10 +745,18 @@ with tab1:
             - **Reguła awansu:** dla każdego meczu wygrywa drużyna z wyższym
               prawdopodobieństwem wygranej wg wzoru Elo:
               `P(A) = 1 / (1 + 10^((Elo_B - Elo_A) / 400))`.
-            - **Wstrzykiwanie realnych wyników:** dla meczów już rozegranych w
-              rzeczywistości, model nie zgaduje &mdash; wynik jest wzięty
-              bezpośrednio z danych (`KNOWN_RESULTS`, odpowiednik `known_winners`
-              z notatnika 08).
+            - **Wstrzykiwanie realnych wyników (twardy override):** dla meczów już
+              rozegranych w rzeczywistości, model nie zgaduje &mdash; wynik jest
+              wzięty bezpośrednio z danych (`KNOWN_RESULTS`, odpowiednik
+              `known_winners` z notatnika 08) i **zawsze** wygrywa, nawet gdy
+              Elo wskazywało inną drużynę jako bardziej prawdopodobnego
+              zwycięzcę. Dopasowanie par drużyn jest niezależne od kolejności
+              (`frozenset({team_a, team_b})` jako klucz słownika).
+            - **Diagnostyka (nieblokująca):** `find_unmatched_known_results()`
+              przeszukuje całą wygenerowaną drabinkę (1/16, 1/8, ćwierćfinały,
+              półfinały, finał) i wyłącznie informacyjnie zgłasza w panelu
+              bocznym wpisy `KNOWN_RESULTS`, które nie trafiły na żaden mecz
+              &mdash; nigdy nie blokuje to działania aplikacji.
             - **Różnica względem notatnika 08:** logika przechodzenia przez rundy
               jest tu spłaszczona (lista kolejnych par, redukowana runda po
               rundzie) zamiast jawnego podziału na stronę LEFT/RIGHT &mdash; daje
@@ -671,16 +794,31 @@ with tab2:
 
     st.divider()
 
+    show_only_wc_2026 = st.toggle(
+        "Pokaż tylko uczestników MŚ 2026",
+        value=True,
+        help="Włączone: tabela zawiera wyłącznie 48 reprezentacji biorących "
+             "udział w Mistrzostwach Świata 2026. Wyłączone: pełna lista "
+             "wszystkich drużyn w rankingu Elo.",
+    )
+
+    if show_only_wc_2026:
+        display_ratings_table = ELO_RATINGS_TABLE.loc[ELO_RATINGS_IS_WC_2026].reset_index(drop=True)
+        display_is_wc_2026 = pd.Series(True, index=display_ratings_table.index)
+    else:
+        display_ratings_table = ELO_RATINGS_TABLE
+        display_is_wc_2026 = ELO_RATINGS_IS_WC_2026
+
     def highlight_world_cup_2026_rows(row: pd.Series) -> list:
         """Row-wise style function for `Styler.apply`: gives every World
         Cup 2026 team a subtle dark-gold background so the 48 relevant
         teams jump out from the ~300-team leaderboard, while staying
         legible against the app's dark theme."""
-        is_participant = ELO_RATINGS_IS_WC_2026.iloc[row.name]
+        is_participant = display_is_wc_2026.iloc[row.name]
         style = "background-color: #332b00;" if is_participant else ""
         return [style] * len(row)
 
-    styled_ratings_table = ELO_RATINGS_TABLE.style.apply(highlight_world_cup_2026_rows, axis=1)
+    styled_ratings_table = display_ratings_table.style.apply(highlight_world_cup_2026_rows, axis=1)
 
     # Centered, fixed-width table: a 3-column layout with a wide middle
     # column keeps the leaderboard from stretching edge-to-edge on wide
@@ -692,7 +830,7 @@ with tab2:
             styled_ratings_table,
             hide_index=True,
             use_container_width=True,
-            height=min(52 * (len(ELO_RATINGS_TABLE) + 1), 1600),
+            height=min(52 * (len(display_ratings_table) + 1), 1600),
             column_config={
                 "Pozycja": st.column_config.NumberColumn("Pozycja", width="small"),
                 "Drużyna": st.column_config.TextColumn("Drużyna", width="medium"),
