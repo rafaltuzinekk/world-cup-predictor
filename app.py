@@ -397,15 +397,30 @@ ROUND_OF_32_FIXTURES = [
 # "Reality Check": fixtures that have already been played in real life, with
 # their actual outcome injected instead of relying on the Elo model.
 # (notebooks/08_deterministic_bracket.ipynb)
+#
+# Stan na dzień dzisiejszy: cała runda 1/16 finału (Round of 32) została już
+# rozegrana, więc każda z 16 par ma wpisany rzeczywisty wynik. Kolejne rundy
+# (1/8 finału i dalej) wciąż czekają na rozegranie, więc nadal są prognozowane
+# przez model Elo.
 KNOWN_RESULTS = {
+    # Lewa strona drabinki (mecze rozegrane)
     ("Germany", "Paraguay"): "Paraguay",
     ("France", "Sweden"): "France",
     ("South Africa", "Canada"): "Canada",
     ("Netherlands", "Morocco"): "Morocco",
+    ("Portugal", "Croatia"): "Portugal",
+    ("Spain", "Austria"): "Spain",
+    ("United States", "Bosnia and Herzegovina"): "United States",
+    ("Belgium", "Senegal"): "Senegal",
+    # Prawa strona drabinki (mecze rozegrane)
     ("Brazil", "Japan"): "Brazil",
     ("Ivory Coast", "Norway"): "Norway",
     ("Mexico", "Ecuador"): "Mexico",
     ("England", "DR Congo"): "England",
+    ("Argentina", "Cape Verde"): "Argentina",
+    ("Australia", "Egypt"): "Egypt",
+    ("Switzerland", "Algeria"): "Algeria",
+    ("Colombia", "Ghana"): "Colombia",
 }
 
 ROUND_LABELS = [
