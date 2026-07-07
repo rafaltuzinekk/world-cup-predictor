@@ -573,7 +573,9 @@ with st.sidebar:
         "**twardy override**: liczy się wyłącznie rzeczywisty wynik, nawet "
         "jeśli dana drużyna miała niższe szanse wg Elo. Pod nazwami drużyn "
         "wciąż widać procentowe szanse, jakie dawał model **przed** "
-        "rozegraniem meczu.\n\n"
+        "rozegraniem meczu. Dla rozegranych meczów wyświetlane procenty to "
+        "**przedmeczowe szanse wyliczone przez model Elo** - drużyna, która "
+        "awansowała mimo szansy ≤ 50%, jest oznaczona ikoną ⚡ (niespodzianka).\n\n"
         "• Mecze **przyszłe** rozstrzyga model ratingu **Elo** "
         "(`02_elo_engine.ipynb`): wygrywa drużyna z szansą > 50%."
     )
@@ -581,7 +583,8 @@ with st.sidebar:
     st.markdown("### 🔑 Legenda")
     st.markdown(
         '<span class="legend-chip">⭐ Wynik rzeczywisty</span>'
-        '<span class="legend-chip">🔮 Prognoza Elo</span>',
+        '<span class="legend-chip">🔮 Prognoza Elo</span>'
+        '<span class="legend-chip">⚡ Niespodzianka (awans z szansą < 50%)</span>',
         unsafe_allow_html=True,
     )
     st.divider()
@@ -664,15 +667,25 @@ with tab1:
 
         real_tag = '<span class="real-tag">Wynik rzeczywisty</span>' if is_real else ""
 
+        # Niespodzianka (⚡): mecz już rozegrany, w którym drużyna, która
+        # awansowała (zwycięzca z KNOWN_RESULTS), miała przedmeczowe
+        # prawdopodobieństwo Elo <= 50% - czyli model jej NIE faworyzował.
+        winner_prob = match["prob_a"] if winner == team_a else match["prob_b"]
+        is_upset = is_real and winner_prob <= 50.0
+        upset_icon = " ⚡" if is_upset else ""
+
+        team_a_name = f"{team_a}{upset_icon}" if winner == team_a else team_a
+        team_b_name = f"{team_b}{upset_icon}" if winner == team_b else team_b
+
         return (
             f'<div class="{card_cls}">'
             f"{real_tag}"
             f'<div class="team-row {row_a_cls}">'
-            f'<span class="team-name">{team_a}</span>'
+            f'<span class="team-name">{team_a_name}</span>'
             f'<span class="team-prob">{prob_a_label}</span>'
             f"</div>"
             f'<div class="team-row {row_b_cls}">'
-            f'<span class="team-name">{team_b}</span>'
+            f'<span class="team-name">{team_b_name}</span>'
             f'<span class="team-prob">{prob_b_label}</span>'
             f"</div>"
             f"</div>"
