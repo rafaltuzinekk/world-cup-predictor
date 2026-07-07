@@ -513,7 +513,17 @@ def find_unmatched_known_results(rounds: list) -> set:
     return set(KNOWN_RESULTS) - matched_keys
 
 
-@st.cache_data(show_spinner=False)
+# NOTE: deliberately NOT decorated with @st.cache_data. This function's
+# only argument (`fixtures`) never changes between reruns, but its actual
+# output depends on the *global* `KNOWN_RESULTS` dict (read indirectly via
+# `predict_match`). Streamlit's cache key is derived from the function's own
+# source code + its explicit arguments - it has no way to know that a global
+# it reads through a nested call has changed. Caching this here previously
+# meant that editing `KNOWN_RESULTS` (e.g. adding/fixing real-world results)
+# could silently keep serving a stale bracket from before the edit, for as
+# long as the Streamlit process stayed warm. The whole walk is only ~31
+# matches, so recomputing it on every rerun is effectively free - not worth
+# the staleness risk.
 def simulate_full_bracket(fixtures: tuple) -> list:
     """Walks the entire Round-of-32 -> Final topology one round at a time,
     exactly like the `simulate_side` loop in
