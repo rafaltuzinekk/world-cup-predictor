@@ -1,0 +1,12 @@
+[theme]
+# Matches the dark green palette used by the custom CSS in app.py
+# (see GLOBAL_CSS). Native widgets that can't be re-skinned with plain
+# CSS - most notably the st.dataframe grid, which renders on a canvas -
+# pick their colors up from this theme instead, so they stay legible
+# (white text) on the app's dark background.
+base = "dark"
+primaryColor = "#1c7a4d"
+backgroundColor = "#081812"
+secondaryBackgroundColor = "#0b2a1f"
+textColor = "#FFFFFF"
+font = "sans serif"
