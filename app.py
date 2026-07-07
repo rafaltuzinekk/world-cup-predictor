@@ -443,20 +443,26 @@ def elo_win_probability(team_a: str, team_b: str) -> float:
 def predict_match(team_a: str, team_b: str) -> dict:
     """Deterministic single-match prediction, mirroring
     notebooks/08_deterministic_bracket.ipynb: real results (if the match has
-    already been played) always win over the model; otherwise the team with
-    Elo-implied probability > 50% advances.
+    already been played) always win over the model when it comes to picking
+    the *winner*; otherwise the team with Elo-implied probability > 50%
+    advances.
+
+    The Elo win probability is always computed and returned, even for
+    already-played ("real") matches: the UI still shows what odds the model
+    gave *before* the match was played, alongside the real-result marker.
     """
+    prob_a = elo_win_probability(team_a, team_b)
+    prob_b = 1.0 - prob_a
+
     if (team_a, team_b) in KNOWN_RESULTS:
         winner = KNOWN_RESULTS[(team_a, team_b)]
         return {"team_a": team_a, "team_b": team_b, "winner": winner,
-                "prob_a": None, "prob_b": None, "is_real": True}
+                "prob_a": prob_a * 100, "prob_b": prob_b * 100, "is_real": True}
     if (team_b, team_a) in KNOWN_RESULTS:
         winner = KNOWN_RESULTS[(team_b, team_a)]
         return {"team_a": team_a, "team_b": team_b, "winner": winner,
-                "prob_a": None, "prob_b": None, "is_real": True}
+                "prob_a": prob_a * 100, "prob_b": prob_b * 100, "is_real": True}
 
-    prob_a = elo_win_probability(team_a, team_b)
-    prob_b = 1.0 - prob_a
     winner = team_a if prob_a > 0.5 else team_b
     return {"team_a": team_a, "team_b": team_b, "winner": winner,
              "prob_a": prob_a * 100, "prob_b": prob_b * 100, "is_real": False}
@@ -502,7 +508,9 @@ with st.sidebar:
     st.markdown("### 🧮 Jak liczony jest wynik?")
     st.caption(
         "• Mecze **już rozegrane** ⭐ pobierają rzeczywisty wynik "
-        "(`known_winners`, zgodnie z `08_deterministic_bracket.ipynb`).\n\n"
+        "(`known_winners`, zgodnie z `08_deterministic_bracket.ipynb`) - pod "
+        "nazwami drużyn wciąż widać procentowe szanse, jakie dawał model "
+        "Elo **przed** rozegraniem meczu.\n\n"
         "• Mecze **przyszłe** rozstrzyga model ratingu **Elo** "
         "(`02_elo_engine.ipynb`): wygrywa drużyna z szansą > 50%."
     )
@@ -565,8 +573,12 @@ with tab1:
         team_a, team_b, winner = match["team_a"], match["team_b"], match["winner"]
         is_real = match["is_real"]
 
+        # Mecze rozegrane pokazują GWIAZDKĘ *i* procentowe szanse wyliczone
+        # przez model Elo - tak użytkownik widzi, jakiego wyniku oczekiwał
+        # model, zanim mecz się faktycznie odbył.
         if is_real:
-            prob_a_label, prob_b_label = "⭐", "⭐"
+            prob_a_label = f"⭐ {match['prob_a']:.0f}%"
+            prob_b_label = f"⭐ {match['prob_b']:.0f}%"
         else:
             prob_a_label = f"{match['prob_a']:.0f}%"
             prob_b_label = f"{match['prob_b']:.0f}%"
