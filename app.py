@@ -281,6 +281,12 @@ footer {visibility: hidden;}
     font-size: 0.78rem;
     margin-right: 10px;
 }
+
+/* ---- "Ranking Elo" legend chip for World Cup 2026 teams ---- */
+.legend-chip.wc2026 {
+    background: #332b00;
+    border: 1px solid #ffce54;
+}
 </style>
 """
 st.markdown(GLOBAL_CSS, unsafe_allow_html=True)
@@ -291,6 +297,7 @@ st.markdown(GLOBAL_CSS, unsafe_allow_html=True)
 
 BASE_DIR = Path(__file__).resolve().parent
 ELO_PATH = BASE_DIR / "data" / "processed" / "current_elo_ratings.csv"
+GROUP_STAGE_STATS_PATH = BASE_DIR / "data" / "processed" / "fbref_group_stats.csv"
 
 
 @st.cache_data(show_spinner=False)
@@ -299,7 +306,64 @@ def load_elo_ratings() -> dict:
     return dict(zip(df_elo["team"], df_elo["current_elo"]))
 
 
+# `fbref_group_stats.csv` (scraped in `notebooks/03_fbref_scraping.ipynb`)
+# has exactly one row per team that played in the World Cup 2026 group
+# stage - i.e. the full list of the 48 participating national teams. FBref
+# spells a handful of names differently than the historical-results
+# dataset that powers the Elo ratings, so they're normalized to the
+# spelling used everywhere else in this app (and in
+# `current_elo_ratings.csv`) before being used for matching.
+FBREF_TO_ELO_NAME = {
+    "Bosnia–Herz": "Bosnia and Herzegovina",
+    "Cabo Verde": "Cape Verde",
+    "Congo DR": "DR Congo",
+    "Czechia": "Czech Republic",
+    "Côte d'Ivoire": "Ivory Coast",
+    "IR Iran": "Iran",
+    "Korea Republic": "South Korea",
+    "Türkiye": "Turkey",
+}
+
+
+@st.cache_data(show_spinner=False)
+def load_world_cup_2026_teams() -> set:
+    """The 48 national teams competing at the World Cup 2026."""
+    df_groups = pd.read_csv(GROUP_STAGE_STATS_PATH)
+    normalized = df_groups["team"].replace(FBREF_TO_ELO_NAME)
+    return set(normalized)
+
+
+WORLD_CUP_2026_TEAMS = load_world_cup_2026_teams()
+
+
+@st.cache_data(show_spinner=False)
+def load_elo_ratings_table() -> tuple:
+    """Full Elo leaderboard (`data/processed/current_elo_ratings.csv`),
+    sorted from strongest to weakest team - used to populate the
+    "Ranking Elo" tab. This file is produced by
+    `notebooks/02_elo_engine.ipynb`, which now only considers matches
+    played from 2016 onward, so the ratings reflect the last 10 years
+    of team form.
+
+    Teams competing at the World Cup 2026 get a trailing 🏆 marker on
+    their name so they stand out immediately in a list of ~300 teams.
+    Returns (dataframe, is_world_cup_2026_mask) - the boolean mask is
+    kept separate from the dataframe so it can drive row highlighting
+    without becoming a visible column.
+    """
+    df_elo = pd.read_csv(ELO_PATH)
+    df_elo = df_elo.sort_values(by="current_elo", ascending=False).reset_index(drop=True)
+    df_elo.insert(0, "Pozycja", df_elo.index + 1)
+
+    is_wc_2026 = df_elo["team"].isin(WORLD_CUP_2026_TEAMS)
+    df_elo.loc[is_wc_2026, "team"] = df_elo.loc[is_wc_2026, "team"] + " 🏆"
+
+    df_elo = df_elo.rename(columns={"team": "Drużyna", "current_elo": "Rating ELO"})
+    return df_elo, is_wc_2026
+
+
 ELO_RATINGS = load_elo_ratings()
+ELO_RATINGS_TABLE, ELO_RATINGS_IS_WC_2026 = load_elo_ratings_table()
 
 # --------------------------------------------------------------------------- #
 # Bracket topology
@@ -435,6 +499,11 @@ with st.sidebar:
         unsafe_allow_html=True,
     )
     st.divider()
+    st.markdown(
+        "📑 **Zakładki:** *Drabinka Turniejowa* (prognoza fazy pucharowej) "
+        "oraz *Ranking Elo* (pełna tabela ratingów wszystkich drużyn)."
+    )
+    st.divider()
     st.caption("Dane: `data/processed/current_elo_ratings.csv`")
     st.caption("Logika: `notebooks/07_bracket_simulator.ipynb`, `notebooks/08_deterministic_bracket.ipynb`")
 
@@ -442,129 +511,203 @@ with st.sidebar:
 # Main view - hero header
 # --------------------------------------------------------------------------- #
 
-st.markdown(
-    '<div class="app-hero">'
-    '<h1>🏆 Mistrzostwa Świata 2026 &mdash; Drabinka Fazy Pucharowej</h1>'
-    '<p>Deterministyczna prognoza całego turnieju: 1/16 finału → 1/8 finału → Ćwierćfinał → Półfinał → Finał</p>'
-    '</div>',
-    unsafe_allow_html=True,
-)
+tab1, tab2 = st.tabs(["Drabinka Turniejowa", "Ranking ELO"])
 
-legend_col_a, legend_col_b, legend_col_c = st.columns(3)
-legend_col_a.metric("Drużyny w drabince", "32")
-legend_col_b.metric("Mecze do rozegrania", str(sum(len(r) for r in bracket_rounds)))
-legend_col_c.metric("Przewidywany Mistrz 🏆", champion)
-
-st.divider()
-
-# --------------------------------------------------------------------------- #
-# Bracket rendering
-# --------------------------------------------------------------------------- #
-
-TOTAL_SLOTS = len(bracket_rounds[0])  # 16 Round-of-32 matches -> tallest column
-BRACKET_HEIGHT_PX = TOTAL_SLOTS * 108
-
-
-# NOTE: every HTML string built below is assembled with ZERO leading
-# whitespace on each concatenated fragment and joined without newlines.
-# Streamlit's markdown renderer treats lines indented by 4+ spaces (or
-# certain blank-line/indentation combinations) as Markdown *code blocks*
-# even with unsafe_allow_html=True, which silently breaks HTML rendering.
-# Keeping everything on tightly joined, non-indented single-line fragments
-# avoids that pitfall entirely.
-
-
-def render_match_card(match: dict) -> str:
-    team_a, team_b, winner = match["team_a"], match["team_b"], match["winner"]
-    is_real = match["is_real"]
-
-    if is_real:
-        prob_a_label, prob_b_label = "⭐", "⭐"
-    else:
-        prob_a_label = f"{match['prob_a']:.0f}%"
-        prob_b_label = f"{match['prob_b']:.0f}%"
-
-    row_a_cls = "winner" if winner == team_a else "loser"
-    row_b_cls = "winner" if winner == team_b else "loser"
-    card_cls = "match-card is-real" if is_real else "match-card"
-
-    real_tag = '<span class="real-tag">Wynik rzeczywisty</span>' if is_real else ""
-
-    return (
-        f'<div class="{card_cls}">'
-        f"{real_tag}"
-        f'<div class="team-row {row_a_cls}">'
-        f'<span class="team-name">{team_a}</span>'
-        f'<span class="team-prob">{prob_a_label}</span>'
-        f"</div>"
-        f'<div class="team-row {row_b_cls}">'
-        f'<span class="team-name">{team_b}</span>'
-        f'<span class="team-prob">{prob_b_label}</span>'
-        f"</div>"
-        f"</div>"
-    )
-
-
-def render_round_column(round_matches: list, label: str) -> str:
-    slots_html = "".join(
-        f'<div class="match-slot">{render_match_card(m)}</div>' for m in round_matches
-    )
-    return (
-        f'<div class="round-title">{label}</div>'
-        f'<div class="bracket-col" style="height:{BRACKET_HEIGHT_PX}px;">'
-        f"{slots_html}"
-        f"</div>"
-    )
-
-
-def render_champion_column(champion_team: str) -> str:
-    return (
-        f'<div class="round-title">Mistrz Świata</div>'
-        f'<div class="bracket-col" style="height:{BRACKET_HEIGHT_PX}px;">'
-        f'<div class="champion-slot">'
-        f'<div class="champion-card">'
-        f'<span class="trophy">🏆</span>'
-        f'<span class="champion-label">Mistrz Świata 2026</span><br/>'
-        f'<span class="champion-name">{champion_team}</span>'
-        f"</div>"
-        f"</div>"
-        f"</div>"
-    )
-
-
-bracket_columns = st.columns(len(bracket_rounds) + 1)
-
-for col, round_matches, label in zip(bracket_columns[:-1], bracket_rounds, ROUND_LABELS):
-    with col:
-        st.markdown(render_round_column(round_matches, label), unsafe_allow_html=True)
-
-with bracket_columns[-1]:
-    st.markdown(render_champion_column(champion), unsafe_allow_html=True)
-
-st.divider()
-st.caption(
-    "⚠️ Drabinka jest generowana automatycznie na bazie ratingu Elo oraz znanych "
-    "wyników rzeczywistych mocno wczesnych meczów. Prognozy służą celom "
-    "demonstracyjnym/portfolio i nie stanowią porady bukmacherskiej."
-)
-
-with st.expander("🔧 Szczegóły techniczne symulacji"):
+with tab1:
     st.markdown(
-        """
-        - **Topologia drabinki:** 16 par 1/16 finału (32 drużyny), redukowane
-          konsekwentnie do 1/8 finału, ćwierćfinału, półfinału i finału
-          &mdash; identyczna struktura jak w `notebooks/07_bracket_simulator.ipynb`
-          i `notebooks/08_deterministic_bracket.ipynb`.
-        - **Reguła awansu:** dla każdego meczu wygrywa drużyna z wyższym
-          prawdopodobieństwem wygranej wg wzoru Elo:
-          `P(A) = 1 / (1 + 10^((Elo_B - Elo_A) / 400))`.
-        - **Wstrzykiwanie realnych wyników:** dla meczów już rozegranych w
-          rzeczywistości, model nie zgaduje &mdash; wynik jest wzięty
-          bezpośrednio z danych (`KNOWN_RESULTS`, odpowiednik `known_winners`
-          z notatnika 08).
-        - **Różnica względem notatnika 08:** logika przechodzenia przez rundy
-          jest tu spłaszczona (lista kolejnych par, redukowana runda po
-          rundzie) zamiast jawnego podziału na stronę LEFT/RIGHT &mdash; daje
-          to identyczne wyniki, ale prościej skaluje się do renderowania w UI.
-        """
+        '<div class="app-hero">'
+        '<h1>🏆 Mistrzostwa Świata 2026 &mdash; Drabinka Fazy Pucharowej</h1>'
+        '<p>Deterministyczna prognoza całego turnieju: 1/16 finału → 1/8 finału → Ćwierćfinał → Półfinał → Finał</p>'
+        '</div>',
+        unsafe_allow_html=True,
+    )
+
+    legend_col_a, legend_col_b, legend_col_c = st.columns(3)
+    legend_col_a.metric("Drużyny w drabince", "32")
+    legend_col_b.metric("Mecze do rozegrania", str(sum(len(r) for r in bracket_rounds)))
+    legend_col_c.metric("Przewidywany Mistrz 🏆", champion)
+
+    st.divider()
+
+    # --------------------------------------------------------------------------- #
+    # Bracket rendering
+    # --------------------------------------------------------------------------- #
+
+    TOTAL_SLOTS = len(bracket_rounds[0])  # 16 Round-of-32 matches -> tallest column
+    BRACKET_HEIGHT_PX = TOTAL_SLOTS * 108
+
+
+    # NOTE: every HTML string built below is assembled with ZERO leading
+    # whitespace on each concatenated fragment and joined without newlines.
+    # Streamlit's markdown renderer treats lines indented by 4+ spaces (or
+    # certain blank-line/indentation combinations) as Markdown *code blocks*
+    # even with unsafe_allow_html=True, which silently breaks HTML rendering.
+    # Keeping everything on tightly joined, non-indented single-line fragments
+    # avoids that pitfall entirely.
+
+
+    def render_match_card(match: dict) -> str:
+        team_a, team_b, winner = match["team_a"], match["team_b"], match["winner"]
+        is_real = match["is_real"]
+
+        if is_real:
+            prob_a_label, prob_b_label = "⭐", "⭐"
+        else:
+            prob_a_label = f"{match['prob_a']:.0f}%"
+            prob_b_label = f"{match['prob_b']:.0f}%"
+
+        row_a_cls = "winner" if winner == team_a else "loser"
+        row_b_cls = "winner" if winner == team_b else "loser"
+        card_cls = "match-card is-real" if is_real else "match-card"
+
+        real_tag = '<span class="real-tag">Wynik rzeczywisty</span>' if is_real else ""
+
+        return (
+            f'<div class="{card_cls}">'
+            f"{real_tag}"
+            f'<div class="team-row {row_a_cls}">'
+            f'<span class="team-name">{team_a}</span>'
+            f'<span class="team-prob">{prob_a_label}</span>'
+            f"</div>"
+            f'<div class="team-row {row_b_cls}">'
+            f'<span class="team-name">{team_b}</span>'
+            f'<span class="team-prob">{prob_b_label}</span>'
+            f"</div>"
+            f"</div>"
+        )
+
+
+    def render_round_column(round_matches: list, label: str) -> str:
+        slots_html = "".join(
+            f'<div class="match-slot">{render_match_card(m)}</div>' for m in round_matches
+        )
+        return (
+            f'<div class="round-title">{label}</div>'
+            f'<div class="bracket-col" style="height:{BRACKET_HEIGHT_PX}px;">'
+            f"{slots_html}"
+            f"</div>"
+        )
+
+
+    def render_champion_column(champion_team: str) -> str:
+        return (
+            f'<div class="round-title">Mistrz Świata</div>'
+            f'<div class="bracket-col" style="height:{BRACKET_HEIGHT_PX}px;">'
+            f'<div class="champion-slot">'
+            f'<div class="champion-card">'
+            f'<span class="trophy">🏆</span>'
+            f'<span class="champion-label">Mistrz Świata 2026</span><br/>'
+            f'<span class="champion-name">{champion_team}</span>'
+            f"</div>"
+            f"</div>"
+            f"</div>"
+        )
+
+
+    bracket_columns = st.columns(len(bracket_rounds) + 1)
+
+    for col, round_matches, label in zip(bracket_columns[:-1], bracket_rounds, ROUND_LABELS):
+        with col:
+            st.markdown(render_round_column(round_matches, label), unsafe_allow_html=True)
+
+    with bracket_columns[-1]:
+        st.markdown(render_champion_column(champion), unsafe_allow_html=True)
+
+    st.divider()
+    st.caption(
+        "⚠️ Drabinka jest generowana automatycznie na bazie ratingu Elo oraz znanych "
+        "wyników rzeczywistych mocno wczesnych meczów. Prognozy służą celom "
+        "demonstracyjnym/portfolio i nie stanowią porady bukmacherskiej."
+    )
+
+    with st.expander("🔧 Szczegóły techniczne symulacji"):
+        st.markdown(
+            """
+            - **Topologia drabinki:** 16 par 1/16 finału (32 drużyny), redukowane
+              konsekwentnie do 1/8 finału, ćwierćfinału, półfinału i finału
+              &mdash; identyczna struktura jak w `notebooks/07_bracket_simulator.ipynb`
+              i `notebooks/08_deterministic_bracket.ipynb`.
+            - **Reguła awansu:** dla każdego meczu wygrywa drużyna z wyższym
+              prawdopodobieństwem wygranej wg wzoru Elo:
+              `P(A) = 1 / (1 + 10^((Elo_B - Elo_A) / 400))`.
+            - **Wstrzykiwanie realnych wyników:** dla meczów już rozegranych w
+              rzeczywistości, model nie zgaduje &mdash; wynik jest wzięty
+              bezpośrednio z danych (`KNOWN_RESULTS`, odpowiednik `known_winners`
+              z notatnika 08).
+            - **Różnica względem notatnika 08:** logika przechodzenia przez rundy
+              jest tu spłaszczona (lista kolejnych par, redukowana runda po
+              rundzie) zamiast jawnego podziału na stronę LEFT/RIGHT &mdash; daje
+              to identyczne wyniki, ale prościej skaluje się do renderowania w UI.
+            """
+        )
+
+# --------------------------------------------------------------------------- #
+# "Ranking ELO" tab - full leaderboard from current_elo_ratings.csv
+# --------------------------------------------------------------------------- #
+
+with tab2:
+    st.markdown(
+        '<div class="app-hero">'
+        '<h1>📊 Ranking Elo &mdash; Wszystkie Drużyny</h1>'
+        '<p>Aktualny rating Elo każdej drużyny, wyliczony na podstawie meczów '
+        'z ostatnich 10 lat (od 2016 roku) - <code>02_elo_engine.ipynb</code></p>'
+        '</div>',
+        unsafe_allow_html=True,
+    )
+
+    rank_col_a, rank_col_b, rank_col_c, rank_col_d = st.columns(4)
+    rank_col_a.metric("Drużyny w rankingu", str(len(ELO_RATINGS_TABLE)))
+    rank_col_b.metric("Reprezentacje MŚ 2026 🏆", str(int(ELO_RATINGS_IS_WC_2026.sum())))
+    rank_col_c.metric("Liderzy rankingu 🥇", ELO_RATINGS_TABLE.iloc[0]["Drużyna"])
+    rank_col_d.metric(
+        "Najwyższy rating",
+        f"{ELO_RATINGS_TABLE.iloc[0]['Rating ELO']:.0f}",
+    )
+
+    st.markdown(
+        '<span class="legend-chip wc2026">🏆 Uczestnik Mistrzostw Świata 2026</span>',
+        unsafe_allow_html=True,
+    )
+
+    st.divider()
+
+    def highlight_world_cup_2026_rows(row: pd.Series) -> list:
+        """Row-wise style function for `Styler.apply`: gives every World
+        Cup 2026 team a subtle dark-gold background so the 48 relevant
+        teams jump out from the ~300-team leaderboard, while staying
+        legible against the app's dark theme."""
+        is_participant = ELO_RATINGS_IS_WC_2026.iloc[row.name]
+        style = "background-color: #332b00;" if is_participant else ""
+        return [style] * len(row)
+
+    styled_ratings_table = ELO_RATINGS_TABLE.style.apply(highlight_world_cup_2026_rows, axis=1)
+
+    # Centered, fixed-width table: a 3-column layout with a wide middle
+    # column keeps the leaderboard from stretching edge-to-edge on wide
+    # screens while still looking centered.
+    table_col_left, table_col_center, table_col_right = st.columns([1, 3, 1])
+
+    with table_col_center:
+        st.dataframe(
+            styled_ratings_table,
+            hide_index=True,
+            use_container_width=True,
+            height=min(52 * (len(ELO_RATINGS_TABLE) + 1), 1600),
+            column_config={
+                "Pozycja": st.column_config.NumberColumn("Pozycja", width="small"),
+                "Drużyna": st.column_config.TextColumn("Drużyna", width="medium"),
+                "Rating ELO": st.column_config.NumberColumn(
+                    "Rating ELO",
+                    format="%.0f",
+                    width="medium",
+                ),
+            },
+        )
+
+    st.divider()
+    st.caption(
+        "Dane: `data/processed/current_elo_ratings.csv` (regenerowane przez "
+        "`notebooks/02_elo_engine.ipynb`, wyłącznie na podstawie meczów "
+        "rozegranych od 2016 roku). Reprezentacje Mistrzostw Świata 2026: "
+        "`data/processed/fbref_group_stats.csv`."
     )
