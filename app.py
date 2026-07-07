@@ -454,13 +454,17 @@ def elo_win_probability(team_a: str, team_b: str) -> float:
 
 def predict_match(team_a: str, team_b: str) -> dict:
     """Deterministic single-match prediction, mirroring
-    notebooks/08_deterministic_bracket.ipynb: real results (if the match has
-    already been played) always win over the model when it comes to picking
-    the *winner*; otherwise the team with Elo-implied probability > 50%
-    advances.
+    notebooks/08_deterministic_bracket.ipynb.
 
-    The Elo win probability is always computed and returned, even for
-    already-played ("real") matches: the UI still shows what odds the model
+    HARD OVERRIDE RULE: if the fixture (in either order) is present in
+    ``KNOWN_RESULTS``, that real-world result is *unconditionally* the
+    winner - the Elo model's opinion is never consulted to decide who
+    advances, even when the real winner had a lower/losing Elo probability
+    (an "upset"). Elo is only ever used to pick a winner when the match has
+    genuinely not been played yet.
+
+    The Elo win probability is always computed and returned regardless of
+    which branch decided the winner: the UI still shows what odds the model
     gave *before* the match was played, alongside the real-result marker.
     """
     prob_a = elo_win_probability(team_a, team_b)
@@ -468,16 +472,46 @@ def predict_match(team_a: str, team_b: str) -> dict:
 
     if (team_a, team_b) in KNOWN_RESULTS:
         winner = KNOWN_RESULTS[(team_a, team_b)]
-        return {"team_a": team_a, "team_b": team_b, "winner": winner,
-                "prob_a": prob_a * 100, "prob_b": prob_b * 100, "is_real": True}
-    if (team_b, team_a) in KNOWN_RESULTS:
+    elif (team_b, team_a) in KNOWN_RESULTS:
         winner = KNOWN_RESULTS[(team_b, team_a)]
+    else:
+        winner = None
+
+    if winner is not None:
+        # Defensive check: catches data-entry bugs (e.g. a typo'd team name
+        # in KNOWN_RESULTS) immediately at the source, instead of silently
+        # producing a bracket where the "known" winner is some third team.
+        assert winner in (team_a, team_b), (
+            f"KNOWN_RESULTS mismatch: fixture {team_a!r} vs {team_b!r} maps "
+            f"to winner {winner!r}, which is neither team."
+        )
         return {"team_a": team_a, "team_b": team_b, "winner": winner,
                 "prob_a": prob_a * 100, "prob_b": prob_b * 100, "is_real": True}
 
     winner = team_a if prob_a > 0.5 else team_b
     return {"team_a": team_a, "team_b": team_b, "winner": winner,
              "prob_a": prob_a * 100, "prob_b": prob_b * 100, "is_real": False}
+
+
+def find_unmatched_known_results(rounds: list) -> set:
+    """Sanity check for the hard-override rule above: returns every
+    ``KNOWN_RESULTS`` entry that was never matched against an actual fixture
+    while walking the bracket. A non-empty result means a real-world result
+    is silently being ignored - almost always because a team name in
+    ``KNOWN_RESULTS`` doesn't exactly match the name used in
+    ``ROUND_OF_32_FIXTURES`` / produced as a winner of a previous round."""
+    matched_keys = set()
+    for round_matches in rounds:
+        for match in round_matches:
+            if not match["is_real"]:
+                continue
+            pair_forward = (match["team_a"], match["team_b"])
+            pair_backward = (match["team_b"], match["team_a"])
+            if pair_forward in KNOWN_RESULTS:
+                matched_keys.add(pair_forward)
+            elif pair_backward in KNOWN_RESULTS:
+                matched_keys.add(pair_backward)
+    return set(KNOWN_RESULTS) - matched_keys
 
 
 @st.cache_data(show_spinner=False)
@@ -506,6 +540,15 @@ def simulate_full_bracket(fixtures: tuple) -> list:
 bracket_rounds = simulate_full_bracket(tuple(ROUND_OF_32_FIXTURES))
 champion = bracket_rounds[-1][0]["winner"]
 
+_unmatched_known_results = find_unmatched_known_results(bracket_rounds)
+if _unmatched_known_results:
+    raise RuntimeError(
+        "KNOWN_RESULTS zawiera wpisy, które nigdy nie zostały dopasowane do "
+        "żadnego meczu w drabince - override nie zadziałał dla: "
+        f"{sorted(_unmatched_known_results)}. Sprawdź nazwy drużyn (literówki, "
+        "kolejność par) w KNOWN_RESULTS względem ROUND_OF_32_FIXTURES."
+    )
+
 # --------------------------------------------------------------------------- #
 # Sidebar
 # --------------------------------------------------------------------------- #
@@ -520,9 +563,11 @@ with st.sidebar:
     st.markdown("### 🧮 Jak liczony jest wynik?")
     st.caption(
         "• Mecze **już rozegrane** ⭐ pobierają rzeczywisty wynik "
-        "(`known_winners`, zgodnie z `08_deterministic_bracket.ipynb`) - pod "
-        "nazwami drużyn wciąż widać procentowe szanse, jakie dawał model "
-        "Elo **przed** rozegraniem meczu.\n\n"
+        "(`known_winners`, zgodnie z `08_deterministic_bracket.ipynb`) - to "
+        "**twardy override**: liczy się wyłącznie rzeczywisty wynik, nawet "
+        "jeśli dana drużyna miała niższe szanse wg Elo. Pod nazwami drużyn "
+        "wciąż widać procentowe szanse, jakie dawał model **przed** "
+        "rozegraniem meczu.\n\n"
         "• Mecze **przyszłe** rozstrzyga model ratingu **Elo** "
         "(`02_elo_engine.ipynb`): wygrywa drużyna z szansą > 50%."
     )
@@ -669,10 +714,14 @@ with tab1:
             - **Reguła awansu:** dla każdego meczu wygrywa drużyna z wyższym
               prawdopodobieństwem wygranej wg wzoru Elo:
               `P(A) = 1 / (1 + 10^((Elo_B - Elo_A) / 400))`.
-            - **Wstrzykiwanie realnych wyników:** dla meczów już rozegranych w
-              rzeczywistości, model nie zgaduje &mdash; wynik jest wzięty
-              bezpośrednio z danych (`KNOWN_RESULTS`, odpowiednik `known_winners`
-              z notatnika 08).
+            - **Wstrzykiwanie realnych wyników (twardy override):** dla meczów już
+              rozegranych w rzeczywistości, model nie zgaduje &mdash; wynik jest
+              wzięty bezpośrednio z danych (`KNOWN_RESULTS`, odpowiednik
+              `known_winners` z notatnika 08) i **zawsze** wygrywa, nawet gdy
+              Elo wskazywało inną drużynę jako bardziej prawdopodobnego
+              zwycięzcę. Funkcja `find_unmatched_known_results()` weryfikuje
+              przy starcie aplikacji, że każdy wpis z `KNOWN_RESULTS` faktycznie
+              trafił na odpowiadający mu mecz w drabince.
             - **Różnica względem notatnika 08:** logika przechodzenia przez rundy
               jest tu spłaszczona (lista kolejnych par, redukowana runda po
               rundzie) zamiast jawnego podziału na stronę LEFT/RIGHT &mdash; daje
