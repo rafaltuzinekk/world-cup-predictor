@@ -412,32 +412,28 @@ ROUND_OF_32_FIXTURES = [
 # czy w danej rundzie drabinki dana drużyna wypadnie jako "team_a" czy
 # "team_b", bo frozenset({"A", "B"}) == frozenset({"B", "A"}).
 KNOWN_RESULTS = {
-    # --- Runda 1/16 finału (Round of 32) - rozegrana w całości ---
-    frozenset({"Germany", "Paraguay"}): "Paraguay",
-    frozenset({"France", "Sweden"}): "France",
-    frozenset({"South Africa", "Canada"}): "Canada",
-    frozenset({"Netherlands", "Morocco"}): "Morocco",
-    frozenset({"Portugal", "Croatia"}): "Portugal",
-    frozenset({"Spain", "Austria"}): "Spain",
-    frozenset({"United States", "Bosnia and Herzegovina"}): "United States",
-    frozenset({"Belgium", "Senegal"}): "Belgium",
-    frozenset({"Brazil", "Japan"}): "Brazil",
-    frozenset({"Ivory Coast", "Norway"}): "Norway",
-    frozenset({"Mexico", "Ecuador"}): "Mexico",
-    frozenset({"England", "DR Congo"}): "England",
-    frozenset({"Argentina", "Cape Verde"}): "Argentina",
-    frozenset({"Australia", "Egypt"}): "Egypt",
-    frozenset({"Switzerland", "Algeria"}): "Switzerland",
-    frozenset({"Colombia", "Ghana"}): "Colombia",
-    # --- Runda 1/8 finału (Round of 16) - 6 z 8 meczów rozegranych ---
-    frozenset({"Paraguay", "France"}): "France",
-    frozenset({"Canada", "Morocco"}): "Morocco",
-    frozenset({"Portugal", "Spain"}): "Spain",
-    frozenset({"United States", "Belgium"}): "Belgium",
-    frozenset({"Brazil", "Norway"}): "Norway",
-    frozenset({"Mexico", "England"}): "England",
-    # (Argentina vs Egypt oraz Switzerland vs Colombia jeszcze nierozegrane
-    # -> nadal prognozowane przez model Elo)
+    frozenset({'Colombia', 'Ghana'}): 'Colombia',
+    frozenset({'Argentina', 'Cape Verde'}): 'Argentina',
+    frozenset({'Egypt', 'Australia'}): 'Egypt',
+    frozenset({'Switzerland', 'Algeria'}): 'Switzerland',
+    frozenset({'Portugal', 'Croatia'}): 'Portugal',
+    frozenset({'Spain', 'Austria'}): 'Spain',
+    frozenset({'United States', 'Bosnia and Herzegovina'}): 'United States',
+    frozenset({'Belgium', 'Senegal'}): 'Belgium',
+    frozenset({'England', 'DR Congo'}): 'England',
+    frozenset({'Mexico', 'Ecuador'}): 'Mexico',
+    frozenset({'France', 'Sweden'}): 'France',
+    frozenset({'Norway', 'Ivory Coast'}): 'Norway',
+    frozenset({'Morocco', 'Netherlands'}): 'Morocco',
+    frozenset({'Paraguay', 'Germany'}): 'Paraguay',
+    frozenset({'Brazil', 'Japan'}): 'Brazil',
+    frozenset({'Canada', 'South Africa'}): 'Canada',
+    frozenset({'Belgium', 'United States'}): 'Belgium',
+    frozenset({'Spain', 'Portugal'}): 'Spain',
+    frozenset({'England', 'Mexico'}): 'England',
+    frozenset({'Norway', 'Brazil'}): 'Norway',
+    frozenset({'France', 'Paraguay'}): 'France',
+    frozenset({'Morocco', 'Canada'}): 'Morocco'
 }
 
 ROUND_LABELS = [
