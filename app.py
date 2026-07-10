@@ -831,7 +831,7 @@ with tab2:
         st.dataframe(
             styled_ratings_table,
             hide_index=True,
-            use_container_width=True,
+            width="stretch",
             height=min(52 * (len(display_ratings_table) + 1), 1600),
             column_config={
                 "Pozycja": st.column_config.NumberColumn("Pozycja", width="small"),
