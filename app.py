@@ -433,7 +433,10 @@ KNOWN_RESULTS = {
     frozenset({'England', 'Mexico'}): 'England',
     frozenset({'Norway', 'Brazil'}): 'Norway',
     frozenset({'France', 'Paraguay'}): 'France',
-    frozenset({'Morocco', 'Canada'}): 'Morocco'
+    frozenset({'Morocco', 'Canada'}): 'Morocco',
+    frozenset({'Argentina', 'Egypt'}): 'Argentina',
+    frozenset({'Switzerland', 'Colombia'}): 'Switzerland',
+    frozenset({'France', 'Morocco'}): 'France'
 }
 
 ROUND_LABELS = [
@@ -568,11 +571,13 @@ with st.sidebar:
     st.divider()
     st.markdown("### 🧮 Jak liczony jest wynik?")
     st.caption(
-        "• Mecze **już rozegrane** ⭐ pobierają rzeczywisty wynik "
+        "• Mecze **już rozegrane** pobierają rzeczywisty wynik "
         "(`known_winners`, zgodnie z `08_deterministic_bracket.ipynb`) - to "
         "**twardy override**: liczy się wyłącznie rzeczywisty wynik, nawet "
-        "jeśli dana drużyna miała niższe szanse wg Elo. Pod nazwami drużyn "
-        "wciąż widać procentowe szanse, jakie dawał model **przed** "
+        "jeśli dana drużyna miała niższe szanse wg Elo. Gwiazdka ⭐ pojawia "
+        "się wyłącznie przy drużynie, która faktycznie awansowała - "
+        "przegrany pokazuje tylko swoje procenty, bez gwiazdki. Pod nazwami "
+        "drużyn wciąż widać procentowe szanse, jakie dawał model **przed** "
         "rozegraniem meczu. Dla rozegranych meczów wyświetlane procenty to "
         "**przedmeczowe szanse wyliczone przez model Elo** - drużyna, która "
         "awansowała mimo szansy ≤ 50%, jest oznaczona ikoną ⚡ (niespodzianka).\n\n"
@@ -651,15 +656,12 @@ with tab1:
         team_a, team_b, winner = match["team_a"], match["team_b"], match["winner"]
         is_real = match["is_real"]
 
-        # Mecze rozegrane pokazują GWIAZDKĘ *i* procentowe szanse wyliczone
-        # przez model Elo - tak użytkownik widzi, jakiego wyniku oczekiwał
-        # model, zanim mecz się faktycznie odbył.
-        if is_real:
-            prob_a_label = f"⭐ {match['prob_a']:.0f}%"
-            prob_b_label = f"⭐ {match['prob_b']:.0f}%"
-        else:
-            prob_a_label = f"{match['prob_a']:.0f}%"
-            prob_b_label = f"{match['prob_b']:.0f}%"
+        # Mecze rozegrane pokazują GWIAZDKĘ wyłącznie przy drużynie, która
+        # faktycznie awansowała (zwyciężyła) - przegrany pokazuje tylko
+        # swoje przedmeczowe procentowe szanse wyliczone przez model Elo,
+        # bez gwiazdki.
+        prob_a_label = f"⭐ {match['prob_a']:.0f}%" if is_real and winner == team_a else f"{match['prob_a']:.0f}%"
+        prob_b_label = f"⭐ {match['prob_b']:.0f}%" if is_real and winner == team_b else f"{match['prob_b']:.0f}%"
 
         row_a_cls = "winner" if winner == team_a else "loser"
         row_b_cls = "winner" if winner == team_b else "loser"
@@ -829,7 +831,7 @@ with tab2:
         st.dataframe(
             styled_ratings_table,
             hide_index=True,
-            use_container_width=True,
+            width="stretch",
             height=min(52 * (len(display_ratings_table) + 1), 1600),
             column_config={
                 "Pozycja": st.column_config.NumberColumn("Pozycja", width="small"),
