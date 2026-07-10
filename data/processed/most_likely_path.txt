@@ -15,7 +15,7 @@
 [R16] Canada (28.6%) vs Morocco (71.4%) ---> Morocco (ACTUAL RESULT)
 [R16] Portugal (37.8%) vs Spain (62.2%) ---> Spain (ACTUAL RESULT)
 [R16] United States (47.4%) vs Belgium (52.6%) ---> Belgium (ACTUAL RESULT)
-[QF]  France (55.2%) vs Morocco (44.8%) ---> France
+[QF]  France (55.2%) vs Morocco (44.8%) ---> France (ACTUAL RESULT)
 [QF]  Spain (71.8%) vs Belgium (28.2%) ---> Spain
 [SF]  France (50.2%) vs Spain (49.8%) ---> France GOES TO FINAL
 
@@ -30,10 +30,10 @@
 [R32] Colombia (83.2%) vs Ghana (16.8%) ---> Colombia (ACTUAL RESULT)
 [R16] Brazil (60.6%) vs Norway (39.4%) ---> Norway (ACTUAL RESULT)
 [R16] Mexico (55.7%) vs England (44.3%) ---> England (ACTUAL RESULT)
-[R16] Argentina (77.2%) vs Egypt (22.8%) ---> Argentina
-[R16] Switzerland (38.8%) vs Colombia (61.2%) ---> Colombia
+[R16] Argentina (77.2%) vs Egypt (22.8%) ---> Argentina (ACTUAL RESULT)
+[R16] Switzerland (38.8%) vs Colombia (61.2%) ---> Switzerland (ACTUAL RESULT)
 [QF]  Norway (45.3%) vs England (54.7%) ---> England
-[QF]  Argentina (65.8%) vs Colombia (34.2%) ---> Argentina
+[QF]  Argentina (75.2%) vs Switzerland (24.8%) ---> Argentina
 [SF]  England (33.5%) vs Argentina (66.5%) ---> Argentina GOES TO FINAL
 
 =================================================================
