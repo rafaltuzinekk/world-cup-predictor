@@ -436,7 +436,10 @@ KNOWN_RESULTS = {
     frozenset({'Morocco', 'Canada'}): 'Morocco',
     frozenset({'Argentina', 'Egypt'}): 'Argentina',
     frozenset({'Switzerland', 'Colombia'}): 'Switzerland',
-    frozenset({'France', 'Morocco'}): 'France'
+    frozenset({'France', 'Morocco'}): 'France',
+    frozenset({'Spain', 'Belgium'}): 'Spain',
+    frozenset({'England', 'Norway'}): 'England',
+    frozenset({'Argentina', 'Switzerland'}): 'Argentina'
 }
 
 ROUND_LABELS = [
