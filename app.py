@@ -336,22 +336,33 @@ def load_world_cup_2026_teams() -> set:
 WORLD_CUP_2026_TEAMS = load_world_cup_2026_teams()
 
 
-@st.cache_data(show_spinner=False)
-def load_elo_ratings_table() -> tuple:
-    """Full Elo leaderboard (`data/processed/current_elo_ratings.csv`),
+def build_elo_ratings_table(elo_ratings: dict) -> tuple:
+    """Full Elo leaderboard built from an arbitrary ``{team: elo}`` mapping,
     sorted from strongest to weakest team - used to populate the
-    "Ranking Elo" tab. This file is produced by
-    `notebooks/02_elo_engine.ipynb`, which now only considers matches
-    played from 2016 onward, so the ratings reflect the last 10 years
-    of team form.
+    "Ranking Elo" tab. Historically this read straight from
+    `data/processed/current_elo_ratings.csv` (produced by
+    `notebooks/02_elo_engine.ipynb`, which only considers matches played
+    from 2016 onward); it now instead takes ``UPDATED_ELO_RATINGS`` -
+    the base pre-tournament ratings run through ``calculate_dynamic_elo``
+    against every played ``KNOWN_RESULTS`` fixture - so the "Ranking Elo"
+    tab reflects the play-offs results too, not just pre-tournament form.
 
     Teams competing at the World Cup 2026 get a trailing 🏆 marker on
     their name so they stand out immediately in a list of ~300 teams.
     Returns (dataframe, is_world_cup_2026_mask) - the boolean mask is
     kept separate from the dataframe so it can drive row highlighting
     without becoming a visible column.
+
+    NOTE: deliberately NOT decorated with `@st.cache_data`, for the same
+    staleness reason documented above `simulate_full_bracket()`: this
+    reads the module-level `WORLD_CUP_2026_TEAMS` global and is called
+    with a dict derived from the module-level `KNOWN_RESULTS` global,
+    neither of which Streamlit's cache-key hashing can see through. The
+    leaderboard is only ~300 rows, so rebuilding it on every rerun is
+    effectively free - not worth risking a stale table after editing
+    `KNOWN_RESULTS`.
     """
-    df_elo = pd.read_csv(ELO_PATH)
+    df_elo = pd.DataFrame(elo_ratings.items(), columns=["team", "current_elo"])
     df_elo = df_elo.sort_values(by="current_elo", ascending=False).reset_index(drop=True)
     df_elo.insert(0, "Pozycja", df_elo.index + 1)
 
@@ -363,7 +374,6 @@ def load_elo_ratings_table() -> tuple:
 
 
 ELO_RATINGS = load_elo_ratings()
-ELO_RATINGS_TABLE, ELO_RATINGS_IS_WC_2026 = load_elo_ratings_table()
 
 # --------------------------------------------------------------------------- #
 # Bracket topology
@@ -449,6 +459,55 @@ ROUND_LABELS = [
     "Półfinał",
     "Finał",
 ]
+
+
+def calculate_dynamic_elo(base_elo: dict, known_results: dict, k_factor: float = 30.0) -> dict:
+    """Aktualizuje bazowy (przed-turniejowy) słownik ratingów Elo, rozgrywając
+    po kolei - w porządku, w jakim zostały dodane - wszystkie mecze zapisane w
+    ``known_results`` (czyli ``KNOWN_RESULTS``/``known_winners``: dotychczas
+    faktycznie rozegrane fixtury fazy pucharowej).
+
+    Dla każdego meczu stosowany jest klasyczny wzór Elo:
+
+        E_winner = 1 / (1 + 10 ** ((Elo_loser - Elo_winner) / 400))
+        Elo_winner_new = Elo_winner + K * (1 - E_winner)
+        Elo_loser_new  = Elo_loser  - K * (1 - E_winner)
+
+    tj. transfer punktów wynosi ``K * (1 - E_winner)`` - dokładnie tyle Elo
+    "przechodzi" ze zwycięzcy do przegranego, tak by suma ratingów obu
+    drużyn zawsze się zerowała (zero-sum). Domyślny współczynnik K = 30.
+
+    Zwraca NOWY słownik (nie modyfikuje ``base_elo`` w miejscu) zawierający
+    wszystkie drużyny z ``base_elo``, ale ze zaktualizowanymi wartościami dla
+    tych, które rozegrały już co najmniej jeden mecz z ``known_results``.
+    """
+    updated_elo = dict(base_elo)
+
+    for teams, winner in known_results.items():
+        team_a, team_b = tuple(teams)
+        loser = team_b if winner == team_a else team_a
+
+        elo_winner = updated_elo.get(winner, 1500)
+        elo_loser = updated_elo.get(loser, 1500)
+
+        expected_winner = 1.0 / (1.0 + math.pow(10, (elo_loser - elo_winner) / 400.0))
+        points_transferred = k_factor * (1.0 - expected_winner)
+
+        updated_elo[winner] = elo_winner + points_transferred
+        updated_elo[loser] = elo_loser - points_transferred
+
+    return updated_elo
+
+
+# Ratingi Elo *po* uwzględnieniu wszystkich rozegranych już meczów fazy
+# pucharowej (KNOWN_RESULTS) - to te wartości, a nie surowe dane
+# przed-turniejowe, zasilają zakładkę "Ranking ELO" (patrz
+# `build_elo_ratings_table` powyżej). Predykcja drabinki
+# (`elo_win_probability` / `predict_match`) wciąż celowo używa surowego,
+# przed-turniejowego `ELO_RATINGS` - tak samo jak w
+# `08_deterministic_bracket.ipynb`.
+UPDATED_ELO_RATINGS = calculate_dynamic_elo(ELO_RATINGS, KNOWN_RESULTS, k_factor=30.0)
+ELO_RATINGS_TABLE, ELO_RATINGS_IS_WC_2026 = build_elo_ratings_table(UPDATED_ELO_RATINGS)
 
 
 def elo_win_probability(team_a: str, team_b: str) -> float:
@@ -797,8 +856,11 @@ with tab2:
     st.markdown(
         '<div class="app-hero">'
         '<h1>📊 Ranking Elo &mdash; Wszystkie Drużyny</h1>'
-        '<p>Aktualny rating Elo każdej drużyny, wyliczony na podstawie meczów '
-        'z ostatnich 10 lat (od 2016 roku) - <code>02_elo_engine.ipynb</code></p>'
+        '<p>Rating Elo każdej drużyny wyliczony na podstawie meczów z ostatnich '
+        '10 lat (od 2016 roku, <code>02_elo_engine.ipynb</code>), a następnie '
+        '<b>zaktualizowany o wyniki rozegranych już meczów fazy pucharowej</b> '
+        '(<code>KNOWN_RESULTS</code>) wg klasycznego wzoru Elo, K = 30 - '
+        '<code>calculate_dynamic_elo()</code></p>'
         '</div>',
         unsafe_allow_html=True,
     )
@@ -869,8 +931,10 @@ with tab2:
 
     st.divider()
     st.caption(
-        "Dane: `data/processed/current_elo_ratings.csv` (regenerowane przez "
-        "`notebooks/02_elo_engine.ipynb`, wyłącznie na podstawie meczów "
-        "rozegranych od 2016 roku). Reprezentacje Mistrzostw Świata 2026: "
+        "Dane bazowe: `data/processed/current_elo_ratings.csv` (regenerowane "
+        "przez `notebooks/02_elo_engine.ipynb`, wyłącznie na podstawie meczów "
+        "rozegranych od 2016 roku), następnie zaktualizowane o wyniki "
+        "wszystkich rozegranych już meczów `KNOWN_RESULTS` (`calculate_dynamic_elo`, "
+        "K = 30). Reprezentacje Mistrzostw Świata 2026: "
         "`data/processed/fbref_group_stats.csv`."
     )
