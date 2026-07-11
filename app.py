@@ -552,8 +552,28 @@ def simulate_full_bracket(fixtures: tuple) -> list:
     return rounds
 
 
+def count_upsets(rounds: list) -> int:
+    """Liczy "niespodzianki" ⚡ w całej wygenerowanej drabince: mecze o
+    statusie **Wynik rzeczywisty** (``is_real=True``), w których drużyna,
+    która faktycznie awansowała, miała przedmeczowe prawdopodobieństwo Elo
+    na wygraną <= 50% - dokładnie ten sam warunek (``winner_prob <= 50.0``),
+    który w ``render_match_card()`` dodaje ikonę ⚡ do karty meczu. Mecze
+    jeszcze nierozegrane (prognozy Elo) nigdy nie są liczone jako
+    niespodzianki, niezależnie od tego, jak wyrównane były szanse."""
+    upsets = 0
+    for round_matches in rounds:
+        for match in round_matches:
+            if not match["is_real"]:
+                continue
+            winner_prob = match["prob_a"] if match["winner"] == match["team_a"] else match["prob_b"]
+            if winner_prob <= 50.0:
+                upsets += 1
+    return upsets
+
+
 bracket_rounds = simulate_full_bracket(tuple(ROUND_OF_32_FIXTURES))
 champion = bracket_rounds[-1][0]["winner"]
+upset_count = count_upsets(bracket_rounds)
 
 # Non-fatal sanity check: never blocks the app from starting. If it finds
 # something, it's surfaced as a small info note in the sidebar (see below)
@@ -633,7 +653,7 @@ with tab1:
 
     legend_col_a, legend_col_b, legend_col_c = st.columns(3)
     legend_col_a.metric("Drużyny w drabince", "32")
-    legend_col_b.metric("Mecze do rozegrania", str(sum(len(r) for r in bracket_rounds)))
+    legend_col_b.metric("Liczba niespodzianek ⚡", str(upset_count))
     legend_col_c.metric("Przewidywany Mistrz 🏆", champion)
 
     st.divider()
