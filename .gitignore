@@ -1,0 +1,23 @@
+# Środowiska wirtualne
+.venv/
+venv/
+env/
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.ipynb_checkpoints/
+
+# Sekrety i śmieci systemowe
+.env
+.DS_Store
+Thumbs.db
+*.log
+
+# DuckDB: plik bazy `data/world_cup.duckdb` (~8 MB) JEST śledzony - dzięki temu aplikacja na
+# Streamlit Cloud startuje od razu z gotowymi danymi. Ignorujemy tylko pliki tymczasowe.
+*.duckdb.wal
+*.duckdb.tmp

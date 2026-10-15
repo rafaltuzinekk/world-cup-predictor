@@ -1,0 +1,44 @@
+🏆 WORLD CUP 2026: FULL 32-TEAM DETERMINISTIC PATH 🏆
+
+=================================================================
+
+--- LEFT BRACKET ---
+[R32] Germany (64.1%) vs Paraguay (35.9%) ---> Paraguay (ACTUAL RESULT)
+[R32] France (84.0%) vs Sweden (16.0%) ---> France (ACTUAL RESULT)
+[R32] South Africa (34.5%) vs Canada (65.5%) ---> Canada (ACTUAL RESULT)
+[R32] Netherlands (41.8%) vs Morocco (58.2%) ---> Morocco (ACTUAL RESULT)
+[R32] Portugal (59.8%) vs Croatia (40.2%) ---> Portugal (ACTUAL RESULT)
+[R32] Spain (74.2%) vs Austria (25.8%) ---> Spain (ACTUAL RESULT)
+[R32] United States (76.8%) vs Bosnia and Herzegovina (23.2%) ---> United States (ACTUAL RESULT)
+[R32] Belgium (52.4%) vs Senegal (47.6%) ---> Belgium (ACTUAL RESULT)
+[R16] Paraguay (21.9%) vs France (78.1%) ---> France (ACTUAL RESULT)
+[R16] Canada (28.6%) vs Morocco (71.4%) ---> Morocco (ACTUAL RESULT)
+[R16] Portugal (37.8%) vs Spain (62.2%) ---> Spain (ACTUAL RESULT)
+[R16] United States (47.4%) vs Belgium (52.6%) ---> Belgium (ACTUAL RESULT)
+[QF]  France (55.2%) vs Morocco (44.8%) ---> France (ACTUAL RESULT)
+[QF]  Spain (71.8%) vs Belgium (28.2%) ---> Spain (ACTUAL RESULT)
+[SF]  France (50.2%) vs Spain (49.8%) ---> France GOES TO FINAL
+
+--- RIGHT BRACKET ---
+[R32] Brazil (60.4%) vs Japan (39.6%) ---> Brazil (ACTUAL RESULT)
+[R32] Ivory Coast (40.9%) vs Norway (59.1%) ---> Norway (ACTUAL RESULT)
+[R32] Mexico (67.0%) vs Ecuador (33.0%) ---> Mexico (ACTUAL RESULT)
+[R32] England (70.2%) vs DR Congo (29.8%) ---> England (ACTUAL RESULT)
+[R32] Argentina (87.5%) vs Cape Verde (12.5%) ---> Argentina (ACTUAL RESULT)
+[R32] Australia (48.2%) vs Egypt (51.8%) ---> Egypt (ACTUAL RESULT)
+[R32] Switzerland (45.4%) vs Algeria (54.6%) ---> Switzerland (ACTUAL RESULT)
+[R32] Colombia (83.2%) vs Ghana (16.8%) ---> Colombia (ACTUAL RESULT)
+[R16] Brazil (60.6%) vs Norway (39.4%) ---> Norway (ACTUAL RESULT)
+[R16] Mexico (55.7%) vs England (44.3%) ---> England (ACTUAL RESULT)
+[R16] Argentina (77.2%) vs Egypt (22.8%) ---> Argentina (ACTUAL RESULT)
+[R16] Switzerland (38.8%) vs Colombia (61.2%) ---> Switzerland (ACTUAL RESULT)
+[QF]  Norway (45.3%) vs England (54.7%) ---> England (ACTUAL RESULT)
+[QF]  Argentina (75.2%) vs Switzerland (24.8%) ---> Argentina (ACTUAL RESULT)
+[SF]  England (33.5%) vs Argentina (66.5%) ---> Argentina GOES TO FINAL
+
+=================================================================
+👑 THE GRAND FINAL 👑
+=================================================================
+France (Left) (45.8%) vs Argentina (Right) (54.2%)
+
+🏆 PREDICTED WORLD CUP CHAMPION: ARGENTINA 🏆

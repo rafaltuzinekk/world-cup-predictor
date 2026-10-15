@@ -1,0 +1,35 @@
+# Środowiska i cache Pythona
+.venv/
+venv/
+env/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Git, CI, IDE
+.git/
+.github/
+.gitignore
+.devcontainer/
+.vscode/
+.idea/
+.cursor/
+
+# Notatniki badawcze i dokumentacja (nie są potrzebne w obrazie)
+notebooks/
+.ipynb_checkpoints/
+*.ipynb
+README.md
+PROGRESS.md
+
+# Pliki Dockera i lokalne śmieci
+Dockerfile
+docker-compose.yml
+.dockerignore
+*.log
+pipeline_out.txt
+
+# Pliki tymczasowe bazy DuckDB
+*.duckdb.wal

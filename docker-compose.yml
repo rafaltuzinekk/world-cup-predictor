@@ -1,0 +1,11 @@
+services:
+  world-cup-analytics:
+    build: .
+    image: world-cup-analytics:latest
+    container_name: world-cup-analytics
+    ports:
+      - "8501:8501"
+    volumes:
+      # Trwała baza DuckDB i pliki wynikowe (data/world_cup.duckdb, data/processed/*)
+      - ./data:/app/data
+    restart: unless-stopped

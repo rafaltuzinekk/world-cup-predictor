@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<!--
+  Dwukierunkowy komponent Streamlit (bez kroku budowania): wyświetla drabinkę HTML/CSS przekazaną z Pythona
+  i odsyła kliknięcia wierszy drużyn (setComponentValue). Protokół: Streamlit Component API v1 (postMessage).
+-->
+<style>
+  html, body { margin: 0; padding: 0; background: transparent; overflow-y: hidden; }
+</style>
+<style id="wc-css"></style>
+</head>
+<body>
+<div id="root"></div>
+<script>
+(function () {
+  var root = document.getElementById("root");
+  var cssNode = document.getElementById("wc-css");
+  var state = { html: null, css: null, interactive: false };
+
+  function send(type, data) {
+    window.parent.postMessage(Object.assign({ isStreamlitMessage: true, type: type }, data || {}), "*");
+  }
+
+  function reportHeight() {
+    var h = Math.ceil(root.getBoundingClientRect().height) + 6;
+    send("streamlit:setFrameHeight", { height: h });
+  }
+
+  function render(args) {
+    if (args.css !== state.css) {
+      cssNode.textContent = args.css || "";
+      state.css = args.css;
+    }
+    if (args.html !== state.html) {
+      root.innerHTML = args.html || "";
+      state.html = args.html;
+    }
+    state.interactive = !!args.interactive;
+    root.classList.toggle("interactive", state.interactive);
+    reportHeight();
+  }
+
+  window.addEventListener("message", function (event) {
+    var data = event.data;
+    if (data && data.type === "streamlit:render") {
+      render(data.args || {});
+    }
+  });
+
+  root.addEventListener("click", function (event) {
+    if (!state.interactive) return;
+    var row = event.target.closest(".mrow[data-team]");
+    if (!row || row.classList.contains("pending")) return;
+    row.classList.add("pending");
+    send("streamlit:setComponentValue", {
+      dataType: "json",
+      value: {
+        id: Date.now() + "-" + Math.random().toString(36).slice(2),
+        a: row.dataset.a,
+        b: row.dataset.b,
+        team: row.dataset.team
+      }
+    });
+  });
+
+  if (window.ResizeObserver) {
+    new ResizeObserver(reportHeight).observe(root);
+  }
+  send("streamlit:componentReady", { apiVersion: 1 });
+  reportHeight();
+})();
+</script>
+</body>
+</html>
